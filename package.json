@@ -1,0 +1,11 @@
+{
+  "name": "github-to-markdown-tests",
+  "version": "1.0.0",
+  "description": "Tests for GitHub to Markdown Chrome Extension",
+  "scripts": {
+    "test": "node tests/parser.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}

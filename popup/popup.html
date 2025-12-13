@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=480, height=640">
+  <title>GitHub to Markdown</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-branding">
+        <svg class="header-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+          <polyline points="14,2 14,8 20,8" />
+          <path d="M8 13h2" />
+          <path d="M8 17h2" />
+          <path d="M14 13l-4 4" />
+          <path d="M14 17l-4-4" />
+        </svg>
+        <h1 class="app-title">GitHub to Markdown</h1>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Status Badge -->
+      <div id="status" class="status-badge status-info">
+        <span class="status-icon">🔍</span>
+        <span class="status-text">Checking page...</span>
+      </div>
+
+      <!-- Markdown Output Section -->
+      <section class="editor-section">
+        <div class="editor-header">
+          <span class="editor-label">Markdown Output</span>
+          <span id="comment-count" class="comment-count"></span>
+        </div>
+        <textarea id="markdown-output" class="markdown-textarea"
+          placeholder="Navigate to a GitHub discussion page and click the extension to convert..." readonly></textarea>
+      </section>
+
+      <!-- Action Buttons -->
+      <div class="action-buttons">
+        <button id="refresh-btn" class="btn" title="Refresh conversion">
+          <span class="btn-icon">🔄</span>
+          <span>Refresh</span>
+        </button>
+        <button id="copy-btn" class="btn btn-primary" disabled title="Copy to clipboard">
+          <span class="btn-icon">📋</span>
+          <span id="copy-btn-text">Copy to Clipboard</span>
+        </button>
+      </div>
+
+      <!-- Settings Section -->
+      <details class="settings-section">
+        <summary class="settings-summary">
+          <span>⚙️ Settings</span>
+          <span class="chevron">▾</span>
+        </summary>
+        <div class="settings-content">
+          <label class="setting-item">
+            <input type="checkbox" id="include-title" checked>
+            <span class="setting-label">Include discussion title</span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="include-timestamps" checked>
+            <span class="setting-label">Include timestamps</span>
+          </label>
+          <label class="setting-item">
+            <input type="checkbox" id="include-nested" checked>
+            <span class="setting-label">Include nested replies</span>
+          </label>
+          <div class="settings-divider"></div>
+          <label class="setting-item">
+            <input type="checkbox" id="show-page-button" checked>
+            <span class="setting-label">Show button on page</span>
+          </label>
+        </div>
+      </details>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <span class="footer-text">Phase 1: Discussions Only</span>
+    </footer>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>
