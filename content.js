@@ -14,6 +14,25 @@
     return window.location.pathname.includes('/discussions/');
   }
 
+  // Check if we're on a GitHub issue page
+  function isIssuePage() {
+    return window.location.pathname.includes('/issues/');
+  }
+
+  // Check if we're on a supported page (discussion or issue)
+  function isSupportedPage() {
+    return isDiscussionPage() || isIssuePage();
+  }
+
+  // Detect the current page type
+  function detectPageType() {
+    const path = window.location.pathname;
+    if (path.includes('/discussions/')) return 'discussion';
+    if (path.includes('/issues/')) return 'issue';
+    if (path.includes('/pull/')) return 'pr';
+    return 'unknown';
+  }
+
   // Get the discussion HTML container
   function getDiscussionHTML() {
     const discussionContainer = document.querySelector('.discussion, .js-discussion');
@@ -27,6 +46,37 @@
       return timeline.outerHTML;
     }
 
+    return null;
+  }
+
+  // Get the issue HTML container
+  function getIssueHTML() {
+    // Primary selector from issue page structure
+    const issueContainer = document.querySelector(
+      '.IssueViewer-module__contentArea--IpMnd, [data-testid="issue-viewer-issue-container"]'
+    );
+    if (issueContainer) {
+      return issueContainer.outerHTML;
+    }
+
+    // Fallback: try to get the comments container
+    const commentsContainer = document.querySelector('[data-testid="issue-viewer-comments-container"]');
+    if (commentsContainer) {
+      // Get parent to include issue body
+      const parent = commentsContainer.closest('[data-testid="issue-viewer-issue-container"]');
+      if (parent) {
+        return parent.outerHTML;
+      }
+    }
+
+    return null;
+  }
+
+  // Unified function to get page HTML based on page type
+  function getPageHTML() {
+    const pageType = detectPageType();
+    if (pageType === 'discussion') return getDiscussionHTML();
+    if (pageType === 'issue') return getIssueHTML();
     return null;
   }
 
@@ -56,6 +106,39 @@
     return '';
   }
 
+  // Get the issue title
+  function getIssueTitle() {
+    // Primary selector from issue page structure
+    const titleEl = document.querySelector('[data-testid="issue-title"]');
+    if (titleEl) {
+      return titleEl.textContent.trim();
+    }
+
+    // Fallback selectors
+    const fallbackSelectors = [
+      'h1 bdi.markdown-title',
+      '.js-issue-title',
+      '.markdown-title'
+    ];
+
+    for (const selector of fallbackSelectors) {
+      const el = document.querySelector(selector);
+      if (el) {
+        return el.textContent.trim();
+      }
+    }
+
+    return '';
+  }
+
+  // Unified function to get page title based on page type
+  function getPageTitle() {
+    const pageType = detectPageType();
+    if (pageType === 'discussion') return getDiscussionTitle();
+    if (pageType === 'issue') return getIssueTitle();
+    return '';
+  }
+
   // Load settings from storage
   async function loadSettings() {
     try {
@@ -70,8 +153,8 @@
 
   // Create and inject the "Copy as Markdown" button
   function injectButton() {
-    // Don't inject if not on a discussion page
-    if (!isDiscussionPage()) {
+    // Don't inject if not on a supported page (discussion or issue)
+    if (!isSupportedPage()) {
       return;
     }
 
@@ -126,7 +209,7 @@
     const button = document.createElement('button');
     button.className = 'gh-to-md-btn btn btn-sm';
     button.innerHTML = '📋 Copy as Markdown';
-    button.title = 'Convert this discussion to markdown and copy to clipboard';
+    button.title = 'Convert this page to markdown and copy to clipboard';
     button.style.cssText = `
       background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
       color: white;
@@ -167,9 +250,10 @@
       button.innerHTML = '⏳ Converting...';
       button.disabled = true;
 
-      const html = getDiscussionHTML();
+      const pageType = detectPageType();
+      const html = getPageHTML();
       if (!html) {
-        throw new Error('Could not find discussion content');
+        throw new Error(`Could not find ${pageType} content`);
       }
 
       // Get settings for button click (use defaults, respecting stored settings)
@@ -183,11 +267,20 @@
         // Use defaults
       }
 
-      // Parse the HTML to markdown
-      const result = window.GitHubToMarkdown.parse(html, {
-        includeTimestamps: settings.includeTimestamps,
-        includeNested: settings.includeNested
-      });
+      // Parse the HTML to markdown using appropriate parser
+      let result;
+      if (pageType === 'discussion') {
+        result = window.GitHubToMarkdown.parse(html, {
+          includeTimestamps: settings.includeTimestamps,
+          includeNested: settings.includeNested
+        });
+      } else if (pageType === 'issue') {
+        result = window.GitHubToMarkdown.parseIssue(html, {
+          includeTimestamps: settings.includeTimestamps
+        });
+      } else {
+        throw new Error('Unsupported page type');
+      }
 
       if (result.error) {
         throw new Error(result.error);
@@ -196,7 +289,7 @@
       // Build final markdown with optional title
       let finalMarkdown = '';
       if (settings.includeTitle) {
-        const title = getDiscussionTitle();
+        const title = getPageTitle();
         if (title) {
           finalMarkdown = `# ${title}\n\n`;
         }
@@ -302,6 +395,53 @@
 
   // Listen for messages from the popup
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // New unified action for both discussions and issues
+    if (request.action === 'getMarkdown') {
+      const pageType = detectPageType();
+      const html = getPageHTML();
+
+      if (!html) {
+        sendResponse({
+          success: false,
+          error: `Could not find ${pageType} content on this page`,
+          pageType: pageType
+        });
+        return true;
+      }
+
+      // Route to appropriate parser
+      let result;
+      if (pageType === 'discussion') {
+        result = window.GitHubToMarkdown.parse(html, {
+          includeTimestamps: request.includeTimestamps !== false,
+          includeNested: request.includeNested !== false
+        });
+      } else if (pageType === 'issue') {
+        result = window.GitHubToMarkdown.parseIssue(html, {
+          includeTimestamps: request.includeTimestamps !== false
+        });
+      } else {
+        sendResponse({
+          success: false,
+          error: 'Unsupported page type',
+          pageType: pageType
+        });
+        return true;
+      }
+
+      sendResponse({
+        success: !result.error,
+        markdown: result.markdown,
+        title: getPageTitle(),
+        commentCount: result.commentCount,
+        error: result.error,
+        pageType: pageType
+      });
+
+      return true;
+    }
+
+    // Legacy action - kept for backward compatibility
     if (request.action === 'getDiscussionMarkdown') {
       const html = getDiscussionHTML();
 
@@ -335,9 +475,13 @@
     }
 
     if (request.action === 'checkPage') {
+      const pageType = detectPageType();
       sendResponse({
+        pageType: pageType,
+        isSupportedPage: isSupportedPage(),
         isDiscussionPage: isDiscussionPage(),
-        hasDiscussionContent: !!getDiscussionHTML()
+        isIssuePage: isIssuePage(),
+        hasContent: !!getPageHTML()
       });
       return true;
     }
@@ -389,7 +533,7 @@
 
     // Re-inject button on navigation (SPA support)
     const observer = new MutationObserver(() => {
-      if (isDiscussionPage() && showPageButton && !document.querySelector('.gh-to-md-btn')) {
+      if (isSupportedPage() && showPageButton && !document.querySelector('.gh-to-md-btn')) {
         injectButton();
       }
     });

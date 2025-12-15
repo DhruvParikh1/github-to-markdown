@@ -25,7 +25,7 @@ A Chrome extension that converts GitHub discussion threads to clean, copyable ma
 
 ### Using the Popup
 
-1. Navigate to any GitHub discussion page (URL contains `/discussions/`)
+1. Navigate to any GitHub discussion or issue page
 2. Click the extension icon in your toolbar
 3. The markdown will automatically be extracted and displayed
 4. Click **Copy to Clipboard** to copy the markdown
@@ -33,9 +33,9 @@ A Chrome extension that converts GitHub discussion threads to clean, copyable ma
 
 ### Using the Page Button
 
-1. Navigate to any GitHub discussion page
-2. Look for the **📋 Copy as Markdown** button near the discussion header
-3. Click it to copy the discussion directly to your clipboard
+1. Navigate to any GitHub discussion or issue page
+2. Look for the **📋 Copy as Markdown** button near the header
+3. Click it to copy the content directly to your clipboard
 
 ## Settings
 
@@ -76,11 +76,12 @@ Another top-level comment.
 ---
 ```
 
-## Phase 1 Limitations
+## Current Limitations
 
-This extension currently supports **GitHub Discussions only**. The following are planned for future releases:
+This extension currently supports **GitHub Discussions and Issues**. The following are planned for future releases:
 
-- ❌ GitHub Issues (Phase 2)
+- ✅ GitHub Discussions
+- ✅ GitHub Issues
 - ❌ Pull Request comments (Phase 3)
 - ❌ Commit comments
 - ❌ Release notes

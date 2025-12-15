@@ -15,7 +15,7 @@ let toastContainer;
 
 // State
 let currentMarkdown = '';
-let discussionTitle = '';
+let pageTitle = '';  // Stores discussion or issue title
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -135,7 +135,7 @@ async function fetchMarkdown() {
   setStatus('info', '🔍', 'Checking page...');
   copyBtn.disabled = true;
   currentMarkdown = '';
-  discussionTitle = '';
+  pageTitle = '';
   markdownTextarea.value = '';
   commentCountEl.textContent = '';
 
@@ -151,14 +151,16 @@ async function fetchMarkdown() {
     // Check if we're on GitHub
     if (!tab.url || !tab.url.includes('github.com')) {
       setStatus('warning', '⚠️', 'Navigate to a GitHub page');
-      markdownTextarea.placeholder = 'This extension only works on GitHub discussion pages.\n\nNavigate to a GitHub discussion and try again.';
+      markdownTextarea.placeholder = 'This extension works on GitHub discussions and issues.\n\nNavigate to a GitHub discussion or issue page and try again.';
       return;
     }
 
-    // Check if it's a discussion page
-    if (!tab.url.includes('/discussions/')) {
-      setStatus('warning', '⚠️', 'Not a discussion page');
-      markdownTextarea.placeholder = 'This page is not a GitHub discussion.\n\nNavigate to a discussion page (URL should contain /discussions/) to convert it to markdown.';
+    // Check if it's a supported page (discussion or issue)
+    const isDiscussion = tab.url.includes('/discussions/');
+    const isIssue = tab.url.includes('/issues/');
+    if (!isDiscussion && !isIssue) {
+      setStatus('warning', '⚠️', 'Not a discussion or issue page');
+      markdownTextarea.placeholder = 'This page is not a GitHub discussion or issue.\n\nNavigate to a discussion (/discussions/) or issue (/issues/) page to convert it to markdown.';
       return;
     }
 
@@ -166,7 +168,7 @@ async function fetchMarkdown() {
     setStatus('info', '⏳', 'Converting...');
 
     const response = await chrome.tabs.sendMessage(tab.id, {
-      action: 'getDiscussionMarkdown',
+      action: 'getMarkdown',
       includeTimestamps: includeTimestampsCheckbox.checked,
       includeNested: includeNestedCheckbox.checked
     });
@@ -184,7 +186,7 @@ async function fetchMarkdown() {
     }
 
     // Store the title and markdown
-    discussionTitle = response.title || '';
+    pageTitle = response.title || '';
     currentMarkdown = response.markdown;
 
     // Update display with title if enabled
@@ -220,8 +222,8 @@ function updateMarkdownDisplay() {
   let displayMarkdown = '';
 
   // Prepend title if enabled and available
-  if (includeTitleCheckbox.checked && discussionTitle) {
-    displayMarkdown = `# ${discussionTitle}\n\n`;
+  if (includeTitleCheckbox.checked && pageTitle) {
+    displayMarkdown = `# ${pageTitle}\n\n`;
   }
 
   displayMarkdown += currentMarkdown;

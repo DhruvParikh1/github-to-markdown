@@ -142,6 +142,208 @@ function parseGitHubDiscussionHTML(htmlString, options = {}) {
 }
 
 /**
+ * Parser function for GitHub Issues - converts issue HTML to markdown
+ * @param {string} htmlString - The HTML string to parse
+ * @param {Object} options - Parser options
+ * @param {boolean} options.includeTimestamps - Whether to include timestamps
+ * @returns {Object} - { markdown: string, commentCount: number, error: string|null }
+ */
+function parseGitHubIssueHTML(htmlString, options = {}) {
+  const { includeTimestamps = true } = options;
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
+
+    let markdownResult = '';
+    let commentCount = 0;
+
+    // Helper to format date
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    };
+
+    // ========================================
+    // 1. Extract Issue Body (first comment)
+    // ========================================
+    const issueBody = doc.querySelector('[data-testid="issue-body"]');
+    if (issueBody) {
+      // Get author
+      const authorEl = doc.querySelector('[data-testid="issue-body-header-author"]');
+      const author = authorEl ? authorEl.textContent.trim() : 'Unknown';
+
+      // Get timestamp
+      const timestampEl = issueBody.querySelector('relative-time');
+      const timestamp = timestampEl ? timestampEl.getAttribute('datetime') : '';
+
+      // Get edit info
+      const editContainer = issueBody.querySelector('.MarkdownLastEditedBy-module__lastEditInfoContainer--EN_Qz');
+      let editInfo = '';
+      if (editContainer) {
+        const editorLink = editContainer.querySelector('a');
+        if (editorLink) {
+          editInfo = ` · edited by ${editorLink.textContent.trim()}`;
+        }
+      }
+
+      // Build header
+      let header = `**${author}** opened`;
+      if (includeTimestamps && timestamp) {
+        header += ` on ${formatDate(timestamp)}`;
+      }
+      header += editInfo;
+
+      // Get body content
+      const bodyContent = issueBody.querySelector('.markdown-body');
+      const body = bodyContent ? extractMarkdownFromBody(bodyContent) : '';
+
+      markdownResult += header + '\n\n' + body + '\n\n---\n\n';
+      commentCount++;
+    }
+
+    // ========================================
+    // 2. Process Timeline Events and Comments
+    // ========================================
+    const timelineContainer = doc.querySelector('[data-testid="issue-timeline-container"]');
+
+    if (timelineContainer) {
+      // Get all timeline elements (events and comments)
+      const timelineElements = timelineContainer.querySelectorAll('[data-wrapper-timeline-id]');
+
+      timelineElements.forEach((element) => {
+        // Check if it's a comment
+        const comment = element.querySelector('.react-issue-comment');
+        if (comment) {
+          commentCount++;
+
+          // Get author
+          const authorEl = element.querySelector('[data-testid="avatar-link"], .ActivityHeader-module__AuthorLink--D7Ojk');
+          const author = authorEl ? authorEl.textContent.trim() : 'Unknown';
+
+          // Get role (Collaborator or Author)
+          let role = '';
+          const collaboratorBadge = element.querySelector('[data-testid="comment-author-association"]');
+          const authorBadge = element.querySelector('[data-testid="comment-subject-author"]');
+          if (collaboratorBadge) {
+            role = ` *${collaboratorBadge.textContent.trim()}*`;
+          } else if (authorBadge) {
+            role = ` *${authorBadge.textContent.trim()}*`;
+          }
+
+          // Get timestamp
+          const timestampEl = element.querySelector('relative-time');
+          const timestamp = timestampEl ? timestampEl.getAttribute('datetime') : '';
+
+          // Get edit info
+          const editContainer = element.querySelector('.MarkdownLastEditedBy-module__lastEditInfoContainer--EN_Qz');
+          let editInfo = '';
+          if (editContainer) {
+            const editorLink = editContainer.querySelector('a');
+            if (editorLink) {
+              editInfo = ` · edited by ${editorLink.textContent.trim()}`;
+            }
+          }
+
+          // Build header
+          let header = `**${author}**${role} commented`;
+          if (includeTimestamps && timestamp) {
+            header += ` on ${formatDate(timestamp)}`;
+          }
+          header += editInfo;
+
+          // Get body content
+          const bodyContent = element.querySelector('.IssueCommentViewer-module__IssueCommentBody--xvkt3 .markdown-body');
+          const body = bodyContent ? extractMarkdownFromBody(bodyContent) : '';
+
+          markdownResult += header + '\n\n' + body + '\n\n---\n\n';
+          return;
+        }
+
+        // Check if it's a label event
+        const labelContainer = element.querySelector('.labels-module__labelContainer--gEfYq');
+        if (labelContainer) {
+          const actorEl = element.querySelector('[data-testid="actor-link"] .row-module__eventProfileReference--CiANK');
+          const actor = actorEl ? actorEl.textContent.trim() : 'Unknown';
+
+          // Get all labels
+          const labels = element.querySelectorAll('.labels-module__labelContainer--gEfYq');
+          const labelNames = Array.from(labels).map(l => {
+            const textEl = l.querySelector('.prc-Text-Text-0ima0');
+            return textEl ? `**${textEl.textContent.trim()}**` : '';
+          }).filter(Boolean);
+
+          // Get timestamp
+          const timestampEl = element.querySelector('relative-time');
+          const timestamp = timestampEl ? timestampEl.getAttribute('datetime') : '';
+
+          let eventText = `**${actor}** added ${labelNames.join(' ')}`;
+          if (includeTimestamps && timestamp) {
+            eventText += ` on ${formatDate(timestamp)}`;
+          }
+
+          markdownResult += eventText + '\n\n---\n\n';
+          return;
+        }
+
+        // Check if it's a title rename event
+        const titleChange = element.querySelector('.RenamedTitleEvent-module__defaultColor--yf7kG');
+        if (titleChange) {
+          const actorEl = element.querySelector('[data-testid="actor-link"] .row-module__eventProfileReference--CiANK');
+          const actor = actorEl ? actorEl.textContent.trim() : 'Unknown';
+
+          // Get old title (strikethrough)
+          const oldTitleEl = element.querySelector('del');
+          const oldTitle = oldTitleEl ? oldTitleEl.textContent.replace(/\[\-\]|\[\/\-\]/g, '').trim() : '';
+
+          // Get new title
+          const newTitleEl = element.querySelector('ins');
+          const newTitle = newTitleEl ? newTitleEl.textContent.replace(/\[\+\]|\[\/\+\]/g, '').trim() : '';
+
+          // Get timestamp
+          const timestampEl = element.querySelector('relative-time');
+          const timestamp = timestampEl ? timestampEl.getAttribute('datetime') : '';
+
+          let eventText = `**${actor}** changed the title ~~${oldTitle}~~ ${newTitle}`;
+          if (includeTimestamps && timestamp) {
+            eventText += ` on ${formatDate(timestamp)}`;
+          }
+
+          markdownResult += eventText + '\n\n---\n\n';
+          return;
+        }
+      });
+    }
+
+    // If no content found, return error
+    if (commentCount === 0) {
+      return {
+        markdown: '',
+        commentCount: 0,
+        error: 'No issue content found. Make sure you are on a GitHub issue page.'
+      };
+    }
+
+    return {
+      markdown: markdownResult.trim(),
+      commentCount: commentCount,
+      error: null
+    };
+  } catch (err) {
+    return {
+      markdown: '',
+      commentCount: 0,
+      error: `Parse error: ${err.message}`
+    };
+  }
+}
+
+/**
  * Extract markdown from a comment body element
  * @param {Element} element - The DOM element containing comment content
  * @returns {string} - Markdown string
@@ -287,6 +489,16 @@ function processNode(node) {
 
   if (tag === 'a') {
     const href = node.getAttribute('href');
+
+    // Check if link contains an image
+    const img = node.querySelector('img');
+    if (img) {
+      // If link contains image, render as image (not linked image for simplicity)
+      const alt = img.getAttribute('alt') || '';
+      const src = img.getAttribute('src') || '';
+      return `![${alt}](${src})`;
+    }
+
     const text = node.textContent;
     if (href) {
       // Make relative URLs absolute
@@ -326,6 +538,7 @@ function processNode(node) {
 if (typeof window !== 'undefined') {
   window.GitHubToMarkdown = {
     parse: parseGitHubDiscussionHTML,
+    parseIssue: parseGitHubIssueHTML,
     extractMarkdownFromBody,
     processNode
   };
