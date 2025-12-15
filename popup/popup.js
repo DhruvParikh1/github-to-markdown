@@ -6,16 +6,21 @@
 document.addEventListener('DOMContentLoaded', init);
 
 // DOM Elements
-let statusEl, statusIconEl, statusTextEl;
-let markdownTextarea, commentCountEl;
+let markdownTextarea, charCountEl, commentCountEl;
+let pageInfoCard, pageTypeBadge, pageTypeText;
 let refreshBtn, copyBtn, copyBtnText;
 let includeTitleCheckbox, includeTimestampsCheckbox, includeNestedCheckbox;
 let showPageButtonCheckbox;
 let toastContainer;
 
+// Views
+let mainView, settingsView, aboutView;
+let navMain, navSettings, navAbout;
+let settingsButton, infoButton;
+
 // State
 let currentMarkdown = '';
-let pageTitle = '';  // Stores discussion or issue title
+let pageTitle = '';
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -27,12 +32,13 @@ const DEFAULT_SETTINGS = {
 
 async function init() {
   // Get DOM elements
-  statusEl = document.getElementById('status');
-  statusIconEl = statusEl.querySelector('.status-icon');
-  statusTextEl = statusEl.querySelector('.status-text');
-
   markdownTextarea = document.getElementById('markdown-output');
+  charCountEl = document.getElementById('char-count');
   commentCountEl = document.getElementById('comment-count');
+
+  pageInfoCard = document.getElementById('page-info');
+  pageTypeBadge = document.getElementById('page-type-badge');
+  pageTypeText = document.getElementById('page-type-text');
 
   refreshBtn = document.getElementById('refresh-btn');
   copyBtn = document.getElementById('copy-btn');
@@ -45,14 +51,29 @@ async function init() {
 
   toastContainer = document.getElementById('toast-container');
 
+  // Views
+  mainView = document.getElementById('main-view');
+  settingsView = document.getElementById('settings-view');
+  aboutView = document.getElementById('about-view');
+
+  // Navigation
+  navMain = document.getElementById('nav-main');
+  navSettings = document.getElementById('nav-settings');
+  navAbout = document.getElementById('nav-about');
+  settingsButton = document.getElementById('settings-button');
+  infoButton = document.getElementById('info-button');
+
   // Load saved settings
   await loadSettings();
 
-  // Attach event listeners
+  // Attach navigation event listeners
+  setupNavigation();
+
+  // Attach button event listeners
   refreshBtn.addEventListener('click', fetchMarkdown);
   copyBtn.addEventListener('click', copyToClipboard);
 
-  // Settings that affect markdown output - re-fetch on change
+  // Settings listeners
   includeTitleCheckbox.addEventListener('change', () => {
     saveSettings();
     updateMarkdownDisplay();
@@ -65,15 +86,89 @@ async function init() {
     saveSettings();
     fetchMarkdown();
   });
-
-  // Settings that affect content script - notify content script on change
   showPageButtonCheckbox.addEventListener('change', async () => {
     saveSettings();
     await notifyContentScriptOfSettings();
   });
 
+  // Listen for Escape key to close popup
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && window.parent !== window) {
+      window.parent.postMessage({ type: 'GH_TO_MD_CLOSE' }, '*');
+    }
+  });
+
+  // Update version badge
+  updateVersionBadge();
+
   // Initial fetch
   fetchMarkdown();
+}
+
+/**
+ * Setup navigation between views
+ */
+function setupNavigation() {
+  const segmentButtons = [navMain, navSettings, navAbout];
+  const views = [mainView, settingsView, aboutView];
+
+  function setActiveSegment(activeButton, activeView) {
+    // Update buttons
+    segmentButtons.forEach(btn => {
+      btn.classList.remove('active');
+      btn.setAttribute('aria-selected', 'false');
+      btn.setAttribute('tabindex', '-1');
+    });
+    activeButton.classList.add('active');
+    activeButton.setAttribute('aria-selected', 'true');
+    activeButton.setAttribute('tabindex', '0');
+    activeButton.focus();
+
+    // Update views
+    views.forEach(view => view.classList.add('hidden'));
+    activeView.classList.remove('hidden');
+  }
+
+  // Click handlers
+  navMain.addEventListener('click', () => setActiveSegment(navMain, mainView));
+  navSettings.addEventListener('click', () => setActiveSegment(navSettings, settingsView));
+  navAbout.addEventListener('click', () => setActiveSegment(navAbout, aboutView));
+
+  // Header button shortcuts
+  settingsButton.addEventListener('click', () => setActiveSegment(navSettings, settingsView));
+  infoButton.addEventListener('click', () => setActiveSegment(navAbout, aboutView));
+
+  // Keyboard navigation (Left/Right arrows)
+  segmentButtons.forEach((btn, index) => {
+    btn.addEventListener('keydown', (e) => {
+      let newIndex = index;
+      if (e.key === 'ArrowRight') {
+        newIndex = (index + 1) % segmentButtons.length;
+        e.preventDefault();
+      } else if (e.key === 'ArrowLeft') {
+        newIndex = (index - 1 + segmentButtons.length) % segmentButtons.length;
+        e.preventDefault();
+      }
+      if (newIndex !== index) {
+        setActiveSegment(segmentButtons[newIndex], views[newIndex]);
+      }
+    });
+  });
+}
+
+/**
+ * Update version badge from manifest
+ */
+function updateVersionBadge() {
+  const versionBadge = document.getElementById('version-badge');
+  if (versionBadge && chrome.runtime.getManifest) {
+    try {
+      const manifest = chrome.runtime.getManifest();
+      versionBadge.textContent = `v${manifest.version}`;
+    } catch (e) {
+      // Fallback
+    }
+  }
 }
 
 /**
@@ -123,7 +218,6 @@ async function notifyContentScriptOfSettings() {
       });
     }
   } catch (error) {
-    // Content script may not be loaded yet, that's okay
     console.log('Could not notify content script:', error.message);
   }
 }
@@ -132,42 +226,41 @@ async function notifyContentScriptOfSettings() {
  * Fetch markdown from the current tab
  */
 async function fetchMarkdown() {
-  setStatus('info', '🔍', 'Checking page...');
   copyBtn.disabled = true;
   currentMarkdown = '';
   pageTitle = '';
   markdownTextarea.value = '';
-  commentCountEl.textContent = '';
+  charCountEl.textContent = '';
+  pageInfoCard.classList.add('hidden');
 
   try {
     // Get the active tab
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     if (!tab) {
-      setStatus('error', '❌', 'No active tab found');
+      showToast('No active tab found', 'error');
       return;
     }
 
     // Check if we're on GitHub
     if (!tab.url || !tab.url.includes('github.com')) {
-      setStatus('warning', '⚠️', 'Navigate to a GitHub page');
+      showToast('Navigate to a GitHub page', 'error');
       markdownTextarea.placeholder = 'This extension works on GitHub discussions, issues, and pull requests.\n\nNavigate to a supported page and try again.';
       return;
     }
 
-    // Check if it's a supported page (discussion, issue, or pull request)
+    // Check if it's a supported page
     const isDiscussion = tab.url.includes('/discussions/');
     const isIssue = tab.url.includes('/issues/');
     const isPullRequest = tab.url.includes('/pull/');
+
     if (!isDiscussion && !isIssue && !isPullRequest) {
-      setStatus('warning', '⚠️', 'Not a supported page');
-      markdownTextarea.placeholder = 'This page is not a GitHub discussion, issue, or pull request.\n\nNavigate to a discussion (/discussions/), issue (/issues/), or pull request (/pull/) page to convert it to markdown.';
+      showToast('Not a supported page', 'error');
+      markdownTextarea.placeholder = 'Navigate to a discussion (/discussions/), issue (/issues/), or pull request (/pull/) page to convert it to markdown.';
       return;
     }
 
     // Request markdown from content script
-    setStatus('info', '⏳', 'Converting...');
-
     const response = await chrome.tabs.sendMessage(tab.id, {
       action: 'getMarkdown',
       includeTimestamps: includeTimestampsCheckbox.checked,
@@ -175,14 +268,14 @@ async function fetchMarkdown() {
     });
 
     if (!response) {
-      setStatus('error', '❌', 'No response from page');
-      markdownTextarea.placeholder = 'Could not communicate with the page.\n\nTry refreshing the GitHub page and reopening this popup.';
+      showToast('No response from page', 'error');
+      markdownTextarea.placeholder = 'Could not communicate with the page.\n\nTry refreshing the GitHub page and clicking the extension again.';
       return;
     }
 
     if (!response.success) {
-      setStatus('error', '❌', response.error || 'Conversion failed');
-      markdownTextarea.placeholder = response.error || 'Failed to convert the discussion.';
+      showToast(response.error || 'Conversion failed', 'error');
+      markdownTextarea.placeholder = response.error || 'Failed to convert the page.';
       return;
     }
 
@@ -190,25 +283,61 @@ async function fetchMarkdown() {
     pageTitle = response.title || '';
     currentMarkdown = response.markdown;
 
+    // Update page info card
+    updatePageInfo(response.pageType, response.commentCount);
+
     // Update display with title if enabled
     updateMarkdownDisplay();
 
-    commentCountEl.textContent = `${response.commentCount} comment${response.commentCount !== 1 ? 's' : ''}`;
-    setStatus('success', '✓', `Found ${response.commentCount} comment${response.commentCount !== 1 ? 's' : ''}`);
+    showToast(`Converted ${response.commentCount} comment${response.commentCount !== 1 ? 's' : ''}`, 'success');
     copyBtn.disabled = false;
 
   } catch (error) {
     console.error('Popup error:', error);
 
-    // Handle specific errors
     if (error.message?.includes('Receiving end does not exist')) {
-      setStatus('warning', '⚠️', 'Refresh the page');
-      markdownTextarea.placeholder = 'The extension needs to be reloaded on this page.\n\nPlease refresh the GitHub discussion page and try again.';
+      showToast('Please refresh the page', 'error');
+      markdownTextarea.placeholder = 'The extension needs to be reloaded on this page.\n\nPlease refresh the GitHub page and try again.';
     } else {
-      setStatus('error', '❌', 'Connection error');
+      showToast('Connection error', 'error');
       markdownTextarea.placeholder = `Error: ${error.message}\n\nTry refreshing the GitHub page.`;
     }
   }
+}
+
+/**
+ * Update page info card
+ */
+function updatePageInfo(pageType, commentCount) {
+  pageInfoCard.classList.remove('hidden');
+
+  // Update badge styling and text
+  pageTypeBadge.className = 'page-type-badge';
+
+  // SVG icons for each page type
+  const discussionIcon = `<svg class="badge-icon" width="12" height="12" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><path d="M32.5,138A72,72,0,1,1,62,167.5l-27.76,8.16a8,8,0,0,1-9.93-9.93Z" /><path d="M163.94,80.11A72,72,0,0,1,223.5,186l8.16,27.76a8,8,0,0,1-9.93,9.93L194,215.5A72.05,72.05,0,0,1,92.06,175.89" /></svg>`;
+  const issueIcon = `<svg class="badge-icon" width="12" height="12" viewBox="0 0 256 256"><circle cx="128" cy="128" r="96" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><line x1="128" y1="132" x2="128" y2="80" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><circle cx="128" cy="172" r="16" fill="currentColor"/></svg>`;
+  const prIcon = `<svg class="badge-icon" width="12" height="12" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="72" cy="192" r="24" /><circle cx="72" cy="64" r="24" /><line x1="72" y1="88" x2="72" y2="168" /><circle cx="200" cy="192" r="24" /><path d="M200,168V110.63a16,16,0,0,0-4.69-11.32L144,48" /><polyline points="144 96 144 48 192 48" /></svg>`;
+
+  let icon, label;
+  if (pageType === 'discussion') {
+    pageTypeBadge.classList.add('badge-discussion');
+    icon = discussionIcon;
+    label = 'Discussion';
+  } else if (pageType === 'issue') {
+    pageTypeBadge.classList.add('badge-issue');
+    icon = issueIcon;
+    label = 'Issue';
+  } else if (pageType === 'pr') {
+    pageTypeBadge.classList.add('badge-pr');
+    icon = prIcon;
+    label = 'Pull Request';
+  }
+
+  pageTypeBadge.innerHTML = `${icon} <span>${label}</span>`;
+
+  // Update comment count
+  commentCountEl.textContent = `${commentCount} found`;
 }
 
 /**
@@ -217,6 +346,7 @@ async function fetchMarkdown() {
 function updateMarkdownDisplay() {
   if (!currentMarkdown) {
     markdownTextarea.value = '';
+    charCountEl.textContent = '';
     return;
   }
 
@@ -229,13 +359,20 @@ function updateMarkdownDisplay() {
 
   displayMarkdown += currentMarkdown;
   markdownTextarea.value = displayMarkdown;
+
+  // Update character count
+  const charCount = displayMarkdown.length;
+  if (charCount > 1000) {
+    charCountEl.textContent = `${(charCount / 1000).toFixed(1)}k chars`;
+  } else {
+    charCountEl.textContent = `${charCount} chars`;
+  }
 }
 
 /**
  * Copy markdown to clipboard
  */
 async function copyToClipboard() {
-  // Get the currently displayed markdown (with or without title)
   const markdownToCopy = markdownTextarea.value;
 
   if (!markdownToCopy) {
@@ -243,9 +380,32 @@ async function copyToClipboard() {
     return;
   }
 
+  let copySuccess = false;
+
+  // Try using the Clipboard API first
   try {
     await navigator.clipboard.writeText(markdownToCopy);
+    copySuccess = true;
+  } catch (clipboardError) {
+    console.log('Clipboard API failed, trying fallback:', clipboardError.message);
 
+    // Fallback: Use execCommand (works in more contexts)
+    try {
+      // Select the textarea content
+      markdownTextarea.select();
+      markdownTextarea.setSelectionRange(0, markdownTextarea.value.length);
+
+      // Execute copy command
+      copySuccess = document.execCommand('copy');
+
+      // Deselect
+      window.getSelection()?.removeAllRanges();
+    } catch (execError) {
+      console.error('Fallback copy also failed:', execError);
+    }
+  }
+
+  if (copySuccess) {
     // Visual feedback
     copyBtn.classList.add('btn-success');
     copyBtn.classList.remove('btn-primary');
@@ -253,26 +413,20 @@ async function copyToClipboard() {
 
     showToast('Copied to clipboard!', 'success');
 
-    // Reset after delay
+    // Hide status badge after successful copy (after a short delay)
+    setTimeout(() => {
+      statusEl.classList.add('hidden');
+    }, 1500);
+
+    // Reset button after delay
     setTimeout(() => {
       copyBtn.classList.remove('btn-success');
       copyBtn.classList.add('btn-primary');
       copyBtnText.textContent = 'Copy to Clipboard';
     }, 2000);
-
-  } catch (error) {
-    console.error('Copy error:', error);
+  } else {
     showToast('Failed to copy', 'error');
   }
-}
-
-/**
- * Set the status badge
- */
-function setStatus(type, icon, text) {
-  statusEl.className = `status-badge status-${type}`;
-  statusIconEl.textContent = icon;
-  statusTextEl.textContent = text;
 }
 
 /**
@@ -284,7 +438,7 @@ function showToast(message, type = 'info') {
 
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.textContent = message;
+  toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-times-circle'}"></i> ${message}`;
 
   toastContainer.appendChild(toast);
 

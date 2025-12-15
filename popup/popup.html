@@ -3,90 +3,228 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=480, height=640">
+  <meta name="viewport" content="width=380, height=560">
   <title>GitHub to Markdown</title>
   <link rel="stylesheet" href="popup.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
 </head>
 
 <body>
-  <div class="app-container">
+  <div id="container" class="container">
     <!-- Header -->
-    <header class="app-header">
-      <div class="header-branding">
-        <svg class="header-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-          <polyline points="14,2 14,8 20,8" />
-          <path d="M8 13h2" />
-          <path d="M8 17h2" />
-          <path d="M14 13l-4 4" />
-          <path d="M14 17l-4-4" />
+    <header class="header">
+      <div class="header-content">
+        <svg class="app-icon" width="22" height="22" viewBox="0 0 256 256" fill="none" stroke="currentColor"
+          stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+          <path
+            d="M119.83,56A52,52,0,0,0,76,32a51.92,51.92,0,0,0-3.49,44.7A49.28,49.28,0,0,0,64,104v8a48,48,0,0,0,48,48h48a48,48,0,0,0,48-48v-8a49.28,49.28,0,0,0-8.51-27.3A51.92,51.92,0,0,0,196,32a52,52,0,0,0-43.83,24Z" />
+          <path d="M104,232V192a32,32,0,0,1,32-32h0a32,32,0,0,1,32,32v40" />
+          <path d="M104,208H72a32,32,0,0,1-32-32A32,32,0,0,0,8,144" />
         </svg>
         <h1 class="app-title">GitHub to Markdown</h1>
       </div>
+      <div class="header-actions">
+        <button id="settings-button" class="icon-btn" title="Settings">
+          <i class="fas fa-cog"></i>
+        </button>
+        <button id="info-button" class="icon-btn" title="About">
+          <i class="fas fa-info-circle"></i>
+        </button>
+      </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="main-content">
-      <!-- Status Badge -->
-      <div id="status" class="status-badge status-info">
-        <span class="status-icon">🔍</span>
-        <span class="status-text">Checking page...</span>
+    <!-- Segmented Navigation Control -->
+    <nav class="segmented-control" role="tablist" aria-label="Main navigation">
+      <button id="nav-main" class="segment-btn active" role="tab" aria-selected="true" tabindex="0">
+        Convert
+      </button>
+      <button id="nav-settings" class="segment-btn" role="tab" aria-selected="false" tabindex="-1">
+        Settings
+      </button>
+      <button id="nav-about" class="segment-btn" role="tab" aria-selected="false" tabindex="-1">
+        About
+      </button>
+    </nav>
+
+    <!-- Main View -->
+    <div id="main-view" class="view-panel fade-in">
+
+      <!-- Page Info Card -->
+      <div id="page-info" class="page-info-card hidden">
+        <div class="page-info-row">
+          <span class="page-info-label">Page Type</span>
+          <span id="page-type-badge" class="page-type-badge">
+            <i class="fas fa-comments"></i>
+            <span id="page-type-text">Discussion</span>
+          </span>
+        </div>
+        <div class="page-info-row">
+          <span class="page-info-label">Comments</span>
+          <span id="comment-count" class="page-info-value">0 found</span>
+        </div>
       </div>
 
-      <!-- Markdown Output Section -->
+      <!-- Markdown Preview Section -->
       <section class="editor-section">
         <div class="editor-header">
-          <span class="editor-label">Markdown Output</span>
-          <span id="comment-count" class="comment-count"></span>
+          <span class="editor-label">
+            <i class="fas fa-file-alt"></i>
+            Markdown Output
+          </span>
+          <span id="char-count" class="char-count"></span>
         </div>
         <textarea id="markdown-output" class="markdown-textarea"
-          placeholder="Navigate to a GitHub discussion page and click the extension to convert..." readonly></textarea>
+          placeholder="Navigate to a GitHub discussion, issue, or pull request page and click the extension to convert..."
+          readonly></textarea>
       </section>
 
       <!-- Action Buttons -->
       <div class="action-buttons">
         <button id="refresh-btn" class="btn" title="Refresh conversion">
-          <span class="btn-icon">🔄</span>
+          <i class="fas fa-sync-alt btn-icon"></i>
           <span>Refresh</span>
         </button>
         <button id="copy-btn" class="btn btn-primary" disabled title="Copy to clipboard">
-          <span class="btn-icon">📋</span>
+          <i class="fas fa-copy btn-icon"></i>
           <span id="copy-btn-text">Copy to Clipboard</span>
         </button>
       </div>
+    </div>
 
-      <!-- Settings Section -->
-      <details class="settings-section">
-        <summary class="settings-summary">
-          <span>⚙️ Settings</span>
-          <span class="chevron">▾</span>
-        </summary>
-        <div class="settings-content">
+    <!-- Settings View -->
+    <div id="settings-view" class="view-panel fade-in hidden">
+      <div class="settings-content">
+        <!-- Output Settings -->
+        <div class="settings-group">
+          <div class="settings-group-title">Output Options</div>
+
           <label class="setting-item">
-            <input type="checkbox" id="include-title" checked>
-            <span class="setting-label">Include discussion title</span>
+            <div class="setting-info">
+              <span class="setting-title">Include Title</span>
+              <span class="setting-desc">Add page title as heading</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="include-title" checked>
+              <span class="toggle-slider"></span>
+            </label>
           </label>
+
           <label class="setting-item">
-            <input type="checkbox" id="include-timestamps" checked>
-            <span class="setting-label">Include timestamps</span>
+            <div class="setting-info">
+              <span class="setting-title">Include Timestamps</span>
+              <span class="setting-desc">Show when comments were posted</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="include-timestamps" checked>
+              <span class="toggle-slider"></span>
+            </label>
           </label>
+
           <label class="setting-item">
-            <input type="checkbox" id="include-nested" checked>
-            <span class="setting-label">Include nested replies</span>
-          </label>
-          <div class="settings-divider"></div>
-          <label class="setting-item">
-            <input type="checkbox" id="show-page-button" checked>
-            <span class="setting-label">Show button on page</span>
+            <div class="setting-info">
+              <span class="setting-title">Include Nested Replies</span>
+              <span class="setting-desc">Show threaded discussion replies</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="include-nested" checked>
+              <span class="toggle-slider"></span>
+            </label>
           </label>
         </div>
-      </details>
-    </main>
+
+        <!-- Page Integration -->
+        <div class="settings-group">
+          <div class="settings-group-title">Page Integration</div>
+
+          <label class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Show Button on Page</span>
+              <span class="setting-desc">Add quick-copy button to GitHub</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="show-page-button" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- About View -->
+    <div id="about-view" class="view-panel fade-in hidden">
+      <div class="about-content">
+        <div class="about-header">
+          <svg class="about-icon" width="48" height="48" viewBox="0 0 256 256" fill="none" stroke="currentColor"
+            stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+            <path
+              d="M119.83,56A52,52,0,0,0,76,32a51.92,51.92,0,0,0-3.49,44.7A49.28,49.28,0,0,0,64,104v8a48,48,0,0,0,48,48h48a48,48,0,0,0,48-48v-8a49.28,49.28,0,0,0-8.51-27.3A51.92,51.92,0,0,0,196,32a52,52,0,0,0-43.83,24Z" />
+            <path d="M104,232V192a32,32,0,0,1,32-32h0a32,32,0,0,1,32,32v40" />
+            <path d="M104,208H72a32,32,0,0,1-32-32A32,32,0,0,0,8,144" />
+          </svg>
+          <div class="about-title-group">
+            <h2 class="about-title">GitHub to Markdown</h2>
+            <span id="version-badge" class="version-badge">v1.1.0</span>
+          </div>
+        </div>
+
+        <p class="about-description">
+          Convert GitHub discussions, issues, and pull requests to clean, copyable markdown with one click.
+        </p>
+
+        <div class="supported-section">
+          <h3 class="section-title">Supported Pages</h3>
+          <div class="supported-badges">
+            <span class="supported-badge badge-discussion" title="GitHub Discussions">
+              <svg class="badge-icon" width="14" height="14" viewBox="0 0 256 256" fill="none" stroke="currentColor"
+                stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M32.5,138A72,72,0,1,1,62,167.5l-27.76,8.16a8,8,0,0,1-9.93-9.93Z" />
+                <path
+                  d="M163.94,80.11A72,72,0,0,1,223.5,186l8.16,27.76a8,8,0,0,1-9.93,9.93L194,215.5A72.05,72.05,0,0,1,92.06,175.89" />
+              </svg>
+              Discussions
+            </span>
+            <span class="supported-badge badge-issue" title="GitHub Issues">
+              <svg class="badge-icon" width="14" height="14" viewBox="0 0 256 256">
+                <circle cx="128" cy="128" r="96" fill="none" stroke="currentColor" stroke-linecap="round"
+                  stroke-linejoin="round" stroke-width="24" />
+                <line x1="128" y1="132" x2="128" y2="80" fill="none" stroke="currentColor" stroke-linecap="round"
+                  stroke-linejoin="round" stroke-width="24" />
+                <circle cx="128" cy="172" r="16" fill="currentColor" />
+              </svg>
+              Issues
+            </span>
+            <span class="supported-badge badge-pr" title="Pull Requests">
+              <svg class="badge-icon" width="14" height="14" viewBox="0 0 256 256" fill="none" stroke="currentColor"
+                stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="72" cy="192" r="24" />
+                <circle cx="72" cy="64" r="24" />
+                <line x1="72" y1="88" x2="72" y2="168" />
+                <circle cx="200" cy="192" r="24" />
+                <path d="M200,168V110.63a16,16,0,0,0-4.69-11.32L144,48" />
+                <polyline points="144 96 144 48 192 48" />
+              </svg>
+              Pull Requests
+            </span>
+          </div>
+        </div>
+
+        <div class="about-footer">
+          <a href="https://www.buymeacoffee.com/dhruvparikh" target="_blank" class="coffee-btn">
+            <i class="fas fa-mug-hot"></i> Buy Me a Coffee
+          </a>
+          <p class="made-with">
+            Made with <span class="heart">❤️</span> for developers
+          </p>
+        </div>
+      </div>
+    </div>
 
     <!-- Footer -->
     <footer class="app-footer">
-      <span class="footer-text">Supports Discussions & Issues</span>
+      <span class="footer-text">
+        <i class="fas fa-check-circle"></i>
+        Supports Discussions · Issues · Pull Requests
+      </span>
     </footer>
   </div>
 

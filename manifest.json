@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "GitHub to Markdown",
-  "version": "1.0.0",
-  "description": "Convert GitHub discussions to clean, copyable markdown with one click",
+  "version": "1.1.0",
+  "description": "Convert GitHub discussions, issues, and pull requests to clean, copyable markdown with one click",
   "permissions": [
     "activeTab",
     "scripting",
@@ -13,12 +13,15 @@
     "https://github.com/*"
   ],
   "action": {
-    "default_popup": "popup/popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",
       "128": "icons/icon-128.png"
-    }
+    },
+    "default_title": "GitHub to Markdown"
+  },
+  "background": {
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
@@ -30,6 +33,19 @@
         "content.js"
       ],
       "css": []
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup/popup.html",
+        "popup/popup.css",
+        "popup/popup.js",
+        "icons/*"
+      ],
+      "matches": [
+        "https://github.com/*"
+      ]
     }
   ],
   "icons": {

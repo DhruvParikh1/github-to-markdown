@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paste Overflow</title>
+    <link rel="stylesheet" href="popup.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <div id="container" class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="#C75C39" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="app-icon">
+                    <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+                    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                    <path d="M12 11h4" />
+                    <path d="M12 16h4" />
+                    <path d="M8 11h.01" />
+                    <path d="M8 16h.01" />
+                </svg>
+                <h1 class="app-title">Paste Overflow</h1>
+            </div>
+            <div class="header-actions">
+                <button id="settings-button" class="icon-btn" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <button id="info-button" class="icon-btn" title="About">
+                    <i class="fas fa-info-circle"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Segmented Navigation Control -->
+        <nav class="segmented-control" role="tablist" aria-label="Main navigation">
+            <button id="nav-paste" class="segment-btn active" role="tab" aria-selected="true" tabindex="0">
+                Paste
+            </button>
+            <button id="nav-history" class="segment-btn" role="tab" aria-selected="false" tabindex="-1">
+                History
+            </button>
+            <button id="nav-stats" class="segment-btn" role="tab" aria-selected="false" tabindex="-1">
+                Stats
+            </button>
+        </nav>
+
+        <!-- Main View -->
+        <div id="main-view" class="fade-in">
+            <!-- Settings Panel -->
+            <section class="settings-panel">
+                <div class="file-type-selector">
+                    <label for="file-type">Paste as:</label>
+                    <select id="file-type">
+                        <option value="">Text (Default)</option>
+                        <option value="txt">.txt File</option>
+                        <option value="md">.md File</option>
+                        <option value="py">.py File</option>
+                        <option value="js">.js File</option>
+                        <option value="json">.json File</option>
+                        <option value="html">.html File</option>
+                        <option value="css">.css File</option>
+                        <option value="other">Other...</option>
+                    </select>
+                </div>
+                <div id="file-details-row" class="file-details-row hidden">
+                    <input type="text" id="custom-filename" placeholder="Filename (optional)" maxlength="50">
+                    <span class="file-separator">.</span>
+                    <input type="text" id="custom-extension" placeholder="Extension (e.g. tsx, sql)" maxlength="10">
+                </div>
+                <div id="file-default-hint" class="file-default-hint hidden">Default: paste_{time}</div>
+            </section>
+
+            <!-- Editor Section -->
+            <section class="editor-section">
+                <textarea id="content-box" class="markdown-textarea"
+                    placeholder="Paste your content here..."></textarea>
+            </section>
+
+            <!-- Status Message -->
+            <div id="error-message" class="hidden"></div>
+            <div id="status-message"></div>
+
+            <!-- Action Buttons -->
+            <section class="action-section">
+                <button id="send-button" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i> Send to Chat
+                </button>
+                <div class="buy-me-coffee">
+                    <a href="https://www.buymeacoffee.com/dhruvparikh" target="_blank">
+                        <img src="https://img.buymeacoffee.com/button-api/?text=Buy me a coffee&emoji=&slug=dhruvparikh&button_colour=5F7FFF&font_colour=ffffff&font_family=Lato&outline_colour=000000&coffee_colour=FFDD00"
+                            alt="Buy me a coffee">
+                    </a>
+                </div>
+            </section>
+
+            <!-- Mascot -->
+            <img id="mascot" class="mascot" src="../icons/Clippy.png" alt="Clippy" title="Hi! I'm Clippy 📋">
+            <div id="mascot-zzz" class="mascot-zzz">💤</div>
+
+            <!-- Milestone Celebration Overlay -->
+            <div id="celebration-overlay" class="celebration-overlay hidden">
+                <div class="celebration-spotlight"></div>
+                <div id="fireworks-container" class="fireworks-container"></div>
+                <div class="celebration-text">
+                    <span class="celebration-emoji" id="celebration-emoji">🎉</span>
+                    <span class="celebration-count" id="celebration-count">10</span>
+                    <span class="celebration-message" id="celebration-message">Clippy's New Friend!</span>
+                </div>
+                <button id="celebration-skip" class="celebration-skip" title="Skip">
+                    <i class="fas fa-forward"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Settings View -->
+        <div id="settings-view" class="view-container fade-in hidden">
+            <div class="view-header">
+                <button id="back-button-settings" class="icon-btn"><i class="fas fa-arrow-left"></i></button>
+                <h2>Settings</h2>
+            </div>
+            <div class="settings-content">
+                <!-- Theme Setting -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-title">Theme</span>
+                        <span class="setting-desc">Choose light or dark mode</span>
+                    </div>
+                    <select id="theme-select" class="setting-select">
+                        <option value="system">System</option>
+                        <option value="light">Light</option>
+                        <option value="dark">Dark</option>
+                    </select>
+                </div>
+
+                <!-- History Size Setting -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-title">History Size</span>
+                        <span class="setting-desc">Number of items to keep</span>
+                    </div>
+                    <select id="history-size-select" class="setting-select">
+                        <option value="5">5 items</option>
+                        <option value="10">10 items</option>
+                        <option value="20">20 items</option>
+                    </select>
+                </div>
+
+                <!-- Default Type Setting -->
+                <div class="setting-item setting-item-column">
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span class="setting-title">Default Type</span>
+                            <span class="setting-desc">Send as text or file attachment</span>
+                        </div>
+                        <div class="setting-segmented-control" role="radiogroup" aria-label="Default type">
+                            <button id="default-type-text" class="setting-segment-btn active" role="radio"
+                                aria-checked="true">Text</button>
+                            <button id="default-type-file" class="setting-segment-btn" role="radio"
+                                aria-checked="false">File</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Default File Type Setting -->
+                <div id="default-filetype-setting" class="setting-item setting-item-column hidden">
+                    <div class="setting-row">
+                        <div class="setting-label">
+                            <span class="setting-title">Default File Type</span>
+                            <span class="setting-desc">Pre-select when opening</span>
+                        </div>
+                        <select id="default-filetype-select" class="setting-select">
+                            <option value="txt">.txt</option>
+                            <option value="md">.md</option>
+                            <option value="py">.py</option>
+                            <option value="js">.js</option>
+                            <option value="json">.json</option>
+                            <option value="html">.html</option>
+                            <option value="css">.css</option>
+                            <option value="other">Other...</option>
+                        </select>
+                    </div>
+                    <div id="default-extension-row" class="setting-extension-row hidden">
+                        <input type="text" id="default-extension-input" class="setting-input"
+                            placeholder="Extension (e.g. tsx, sql)" maxlength="10">
+                    </div>
+                </div>
+
+                <!-- Mascot Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-title">Show Mascot</span>
+                        <span class="setting-desc">Clippy the clipboard buddy</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="mascot-toggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Danger Zone -->
+                <div class="setting-danger-zone">
+                    <div class="setting-danger-title">Danger Zone</div>
+                    <button id="reset-stats-btn" class="btn btn-danger">
+                        <i class="fas fa-trash-alt"></i> Reset All Stats
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reset Stats Confirmation Modal -->
+        <div id="reset-stats-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <i class="fas fa-exclamation-triangle modal-warning-icon"></i>
+                    <h3>Reset All Stats?</h3>
+                </div>
+                <p class="modal-body">
+                    This will permanently delete all your usage statistics and time saved data. This action cannot be
+                    undone.
+                </p>
+                <div class="modal-confirm-input">
+                    <label for="reset-confirm-input">Type <strong>reset stats</strong> to confirm:</label>
+                    <input type="text" id="reset-confirm-input" placeholder="reset stats" autocomplete="off">
+                </div>
+                <div class="modal-actions">
+                    <button id="reset-cancel-btn" class="btn">Cancel</button>
+                    <button id="reset-confirm-btn" class="btn btn-danger" disabled>Reset Stats</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reset Pokes Easter Egg Modal -->
+        <div id="reset-pokes-modal" class="modal-overlay hidden">
+            <div class="modal-content modal-clippy">
+                <div class="modal-clippy-header">
+                    <img src="../icons/Clippy.png" alt="Clippy" class="modal-clippy-icon">
+                </div>
+                <p class="modal-clippy-message">
+                    hi, Clippy here.. I see you enjoy bugging me... wanna reset your pokes? O.O
+                </p>
+                <div class="modal-actions modal-actions-stacked">
+                    <button id="reset-pokes-confirm" class="btn btn-primary">Omg yes pls rn</button>
+                    <button id="reset-pokes-cancel" class="btn">No way how could I</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info View -->
+        <div id="info-view" class="view-container fade-in hidden">
+            <div class="view-header">
+                <button id="back-button" class="icon-btn"><i class="fas fa-arrow-left"></i></button>
+                <h2>About</h2>
+                <span class="version-badge" id="version-badge">v2.0</span>
+            </div>
+            <div class="info-content">
+                <p>
+                    <strong>Paste Overflow</strong> helps you effortlessly paste large text or attach files to AI chat
+                    platforms.
+                </p>
+
+                <h3 class="info-section-title">Supported Platforms</h3>
+                <div class="platform-icons">
+                    <span class="platform-badge platform-claude" title="Claude AI">C</span>
+                    <span class="platform-badge platform-chatgpt" title="ChatGPT">G</span>
+                    <span class="platform-badge platform-kimi" title="Kimi AI">K</span>
+                    <span class="platform-badge platform-deepseek" title="DeepSeek">D</span>
+                    <span class="platform-badge platform-grok" title="Grok">X</span>
+                    <span class="platform-badge platform-gemini" title="Google Gemini">G</span>
+                </div>
+
+                <!-- Easter Egg Counter -->
+                <div class="info-stat-card" id="info-clippy-card">
+                    <img src="../icons/Clippy.png" alt="Clippy" class="info-stat-icon-img" id="info-clippy-icon">
+                    <div class="info-stat-content">
+                        <span class="info-stat-value" id="poke-count">0</span>
+                        <span class="info-stat-label">Clippy Pokes</span>
+                    </div>
+                </div>
+
+                <!-- Buy Me a Coffee -->
+                <a href="https://www.buymeacoffee.com/dhruvparikh" target="_blank" class="info-coffee-btn">
+                    <i class="fas fa-mug-hot"></i>
+                    Buy Me a Coffee
+                </a>
+
+                <div class="info-footer-wrapper">
+                    <p class="info-footer">
+                        Made with ❤️ by <span class="author-name" id="author-name">Dhruv Parikh</span>
+                    </p>
+                    <!-- Fun Fact Tooltip -->
+                    <div class="fun-fact-tooltip" id="fun-fact-tooltip">
+                        <div class="fun-fact-content">
+                            <span class="fun-fact-icon">💡</span>
+                            <p>Paste Overflow used to be called "Claude Paste" and was only for Claude because I was so
+                                annoyed having to paste content in chunks for my large prompts to ensure Claude would
+                                understand what it's looking for in my codebase. I hope you find it useful!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- History View -->
+        <div id="history-view" class="view-container fade-in hidden">
+            <div class="view-header">
+                <h2>History</h2>
+                <button id="clear-history-button" class="icon-btn" title="Clear History"><i
+                        class="fas fa-trash"></i></button>
+            </div>
+            <ul id="history-list" class="history-list"></ul>
+        </div>
+
+        <!-- Stats View -->
+        <div id="stats-view" class="view-container fade-in hidden">
+            <div class="view-header">
+                <h2>Stats</h2>
+            </div>
+            <div id="stats-content" class="stats-summary"></div>
+        </div>
+    </div>
+    <script src="popup.js"></script>
+</body>
+
+</html>
