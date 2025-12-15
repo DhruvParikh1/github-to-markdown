@@ -1,10 +1,10 @@
 # GitHub to Markdown
 
-A Chrome extension that converts GitHub discussion threads to clean, copyable markdown with one click.
+A Chrome extension that converts GitHub discussions, issues, and pull requests to clean, copyable markdown with one click.
 
 ## Features
 
-- 📋 **One-click conversion** - Convert any GitHub discussion to markdown instantly
+- 📋 **One-click conversion** - Convert any GitHub discussion, issue, or PR to markdown instantly
 - 🔄 **Preserves formatting** - Maintains code blocks, lists, headers, links, and more
 - 💬 **Nested replies** - Properly indents nested comment threads
 - ⚙️ **Configurable** - Toggle timestamps and nested replies on/off
@@ -25,7 +25,7 @@ A Chrome extension that converts GitHub discussion threads to clean, copyable ma
 
 ### Using the Popup
 
-1. Navigate to any GitHub discussion or issue page
+1. Navigate to any GitHub discussion, issue, or pull request page
 2. Click the extension icon in your toolbar
 3. The markdown will automatically be extracted and displayed
 4. Click **Copy to Clipboard** to copy the markdown
@@ -33,7 +33,7 @@ A Chrome extension that converts GitHub discussion threads to clean, copyable ma
 
 ### Using the Page Button
 
-1. Navigate to any GitHub discussion or issue page
+1. Navigate to any GitHub discussion, issue, or pull request page
 2. Look for the **📋 Copy as Markdown** button near the header
 3. Click it to copy the content directly to your clipboard
 
@@ -55,6 +55,9 @@ A Chrome extension that converts GitHub discussion threads to clean, copyable ma
 | Links          | `[text](url)`   |
 | Blockquotes    | `> quote`       |
 | Images         | `![alt](url)`   |
+| Videos         | `[Video](url)`  |
+| Details        | `<details>...`  |
+| Toggle         | `<summary>...`  |
 
 ## Example Output
 
@@ -78,19 +81,18 @@ Another top-level comment.
 
 ## Current Limitations
 
-This extension currently supports **GitHub Discussions and Issues**. The following are planned for future releases:
+This extension currently supports **GitHub Discussions, Issues, and Pull Requests**. The following are planned for future releases:
 
 - ✅ GitHub Discussions
 - ✅ GitHub Issues
-- ❌ Pull Request comments (Phase 3)
-- ❌ Commit comments
+- ✅ Pull Requests (Commits, Comments, Merge Info)
 - ❌ Release notes
 
 ## Troubleshooting
 
 ### Extension not working?
 
-1. Make sure you're on a GitHub discussion page (URL should contain `/discussions/`)
+1. Make sure you're on a supported GitHub page (URL should contain `/discussions/`, `/issues/`, or `/pull/`)
 2. Try refreshing the GitHub page
 3. Reopen the extension popup
 
@@ -100,7 +102,7 @@ The extension needs to be loaded when the page opens. Simply refresh the GitHub 
 
 ### Copy button disabled?
 
-This means no markdown was found. Make sure you're on a valid GitHub discussion page with at least one comment.
+This means no markdown was found. Make sure you're on a valid GitHub page with content.
 
 ## Privacy
 
@@ -119,14 +121,16 @@ The extension includes a test suite that validates the parser against reference 
 ```bash
 cd github-to-markdown
 npm install
-npm test
+npm test            # Run all tests
+npm run test:pr     # Run PR tests only
+npm run test:issue  # Run Issue tests only
 ```
 
-Tests use the HTML from a real GitHub discussion (`reference-successful-example/discussion_element.html`) and verify:
-- Author name extraction
-- Timestamp formatting
-- Markdown conversion (headers, code blocks, links)
+Tests use real HTML examples to verify:
+- Author name & timestamp extraction
+- Markdown conversion (headers, code blocks, links, images)
 - Nested reply handling
+- Pull request elements (commits, merge info, checks)
 - Error handling
 
 ## License
