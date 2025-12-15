@@ -1,6 +1,14 @@
 # GitHub to Markdown
 
+![GitHub to Markdown Banner](WebStore/WebStore-Promo-Stuff/Marquee-promo-tile.png)
+
 A Chrome extension that converts GitHub discussions, issues, and pull requests to clean, copyable markdown with one click.
+
+## Screenshots
+
+| Issues | Pull Requests | Discussions |
+|:------:|:-------------:|:-----------:|
+| ![Issues](WebStore/WebStore-Promo-Stuff/Screenshot-1-Issues.png) | ![Pull Requests](WebStore/WebStore-Promo-Stuff/Screenshot-2-Pull-Requests.png) | ![Discussions](WebStore/WebStore-Promo-Stuff/Screenshot-3-Discussion.png) |
 
 ## Features
 
