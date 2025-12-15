@@ -19,9 +19,14 @@
     return window.location.pathname.includes('/issues/');
   }
 
-  // Check if we're on a supported page (discussion or issue)
+  // Check if we're on a GitHub pull request page
+  function isPullRequestPage() {
+    return window.location.pathname.includes('/pull/');
+  }
+
+  // Check if we're on a supported page (discussion, issue, or PR)
   function isSupportedPage() {
-    return isDiscussionPage() || isIssuePage();
+    return isDiscussionPage() || isIssuePage() || isPullRequestPage();
   }
 
   // Detect the current page type
@@ -72,11 +77,29 @@
     return null;
   }
 
+  // Get the pull request HTML container
+  function getPullRequestHTML() {
+    // Primary selector for PR timeline
+    const timeline = document.querySelector('.pull-discussion-timeline');
+    if (timeline) {
+      return timeline.outerHTML;
+    }
+
+    // Fallback: try to get the discussion container
+    const discussion = document.querySelector('.js-discussion');
+    if (discussion) {
+      return discussion.outerHTML;
+    }
+
+    return null;
+  }
+
   // Unified function to get page HTML based on page type
   function getPageHTML() {
     const pageType = detectPageType();
     if (pageType === 'discussion') return getDiscussionHTML();
     if (pageType === 'issue') return getIssueHTML();
+    if (pageType === 'pr') return getPullRequestHTML();
     return null;
   }
 
@@ -131,11 +154,36 @@
     return '';
   }
 
+  // Get the pull request title
+  function getPullRequestTitle() {
+    // Primary selector for PR title
+    const titleEl = document.querySelector('.js-issue-title');
+    if (titleEl) {
+      return titleEl.textContent.trim();
+    }
+
+    // Fallback selectors
+    const fallbackSelectors = [
+      'h1 bdi.markdown-title',
+      '.gh-header-title .markdown-title'
+    ];
+
+    for (const selector of fallbackSelectors) {
+      const el = document.querySelector(selector);
+      if (el) {
+        return el.textContent.trim();
+      }
+    }
+
+    return '';
+  }
+
   // Unified function to get page title based on page type
   function getPageTitle() {
     const pageType = detectPageType();
     if (pageType === 'discussion') return getDiscussionTitle();
     if (pageType === 'issue') return getIssueTitle();
+    if (pageType === 'pr') return getPullRequestTitle();
     return '';
   }
 
@@ -276,6 +324,10 @@
         });
       } else if (pageType === 'issue') {
         result = window.GitHubToMarkdown.parseIssue(html, {
+          includeTimestamps: settings.includeTimestamps
+        });
+      } else if (pageType === 'pr') {
+        result = window.GitHubToMarkdown.parsePullRequest(html, {
           includeTimestamps: settings.includeTimestamps
         });
       } else {
@@ -420,6 +472,10 @@
         result = window.GitHubToMarkdown.parseIssue(html, {
           includeTimestamps: request.includeTimestamps !== false
         });
+      } else if (pageType === 'pr') {
+        result = window.GitHubToMarkdown.parsePullRequest(html, {
+          includeTimestamps: request.includeTimestamps !== false
+        });
       } else {
         sendResponse({
           success: false,
@@ -480,6 +536,7 @@
         pageType: pageType,
         isSupportedPage: isSupportedPage(),
         isDiscussionPage: isDiscussionPage(),
+        isPullRequestPage: isPullRequestPage(),
         isIssuePage: isIssuePage(),
         hasContent: !!getPageHTML()
       });

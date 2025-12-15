@@ -344,6 +344,301 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
 }
 
 /**
+ * Parser function for GitHub Pull Requests - converts PR HTML to markdown
+ * @param {string} htmlString - The HTML string to parse
+ * @param {Object} options - Parser options
+ * @param {boolean} options.includeTimestamps - Whether to include timestamps
+ * @returns {Object} - { markdown: string, commentCount: number, error: string|null }
+ */
+function parsePullRequest(htmlString, options = {}) {
+  const { includeTimestamps = true } = options;
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
+
+    let markdownResult = '';
+    let commentCount = 0;
+
+    // Helper to format date
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    };
+
+    // ========================================
+    // 1. Extract PR Body (first comment)
+    // ========================================
+    const prBody = doc.querySelector('.js-comment-container .comment-body, .js-comment-body');
+    if (prBody) {
+      // Get author from pr body header
+      const authorEl = doc.querySelector('.author.Link--primary');
+      const author = authorEl ? authorEl.textContent.trim() : 'Unknown';
+
+      // Get timestamp
+      const timestampEl = doc.querySelector('.timeline-comment-header relative-time, .js-comment-container relative-time');
+      const timestamp = timestampEl ? timestampEl.getAttribute('datetime') : '';
+
+      // Build header
+      let header = `**${author}** commented`;
+      if (includeTimestamps && timestamp) {
+        header += ` ${formatDate(timestamp)}`;
+      }
+
+      // Get body content
+      const body = extractMarkdownFromBody(prBody);
+
+      markdownResult += header + '\n\n' + body + '\n\n---\n\n';
+      commentCount++;
+    }
+
+    // ========================================
+    // 2. Process Timeline Items
+    // ========================================
+    const timelineItems = doc.querySelectorAll('.js-timeline-item');
+
+    timelineItems.forEach((item) => {
+      // Skip the first item if it's the PR body we already processed
+      if (item.querySelector('.js-command-palette-pull-body')) {
+        return;
+      }
+
+      // Check for commit entries
+      const commitLink = item.querySelector('.TimelineItem-body code a.Link--secondary[href*="/commits/"]');
+      if (commitLink) {
+        const commitMessage = item.querySelector('.TimelineItem-body code a.markdown-title');
+        const avatarLink = item.querySelector('.AvatarStack-body a');
+
+        if (commitMessage) {
+          const author = avatarLink ? avatarLink.getAttribute('href').replace('/', '').replace('/apps/', '') : 'Unknown';
+          const message = commitMessage.textContent.trim();
+          const sha = commitLink.textContent.trim();
+          const commitUrl = commitLink.getAttribute('href');
+          const fullUrl = commitUrl.startsWith('/') ? 'https://github.com' + commitUrl : commitUrl;
+
+          let commitEntry = `**${author}** added 1 commit`;
+          if (includeTimestamps) {
+            const timestampEl = item.querySelector('relative-time');
+            if (timestampEl) {
+              commitEntry += ` ${formatDate(timestampEl.getAttribute('datetime'))}`;
+            }
+          }
+          commitEntry += '\n\n';
+          commitEntry += `[${message}](${fullUrl}) \`${sha}\`\n\n---\n\n`;
+
+          markdownResult += commitEntry;
+          return;
+        }
+      }
+
+      // Check for comments (from bots or users)
+      const commentBody = item.querySelector('.comment-body, .js-comment-body');
+      if (commentBody) {
+        const authorEl = item.querySelector('.author.Link--primary, a[href*="/apps/"]');
+        let author = 'Unknown';
+        let isBot = false;
+
+        if (authorEl) {
+          author = authorEl.textContent.trim() || authorEl.getAttribute('href').replace('/apps/', '');
+          isBot = authorEl.getAttribute('href')?.includes('/apps/');
+        }
+
+        // Check for Author role badge
+        const authorBadge = item.querySelector('.Label');
+        const role = authorBadge?.textContent?.trim() === 'Author' ? ' *Author*' : '';
+
+        // Get timestamp
+        const timestampEl = item.querySelector('relative-time');
+        const timestamp = timestampEl ? timestampEl.getAttribute('datetime') : '';
+
+        // Check for edited
+        let editInfo = '';
+        const editedEl = item.querySelector('.js-comment-edit-history');
+        if (editedEl) {
+          editInfo = ' • edited';
+        }
+
+        // Build header
+        let header = `**${author}**`;
+        if (isBot) header += ' bot';
+        header += role;
+        header += ' commented';
+        if (includeTimestamps && timestamp) {
+          header += ` ${formatDate(timestamp)}`;
+        }
+        header += editInfo;
+
+        // Get body content
+        const body = extractMarkdownFromBody(commentBody);
+
+        markdownResult += header + '\n\n' + body + '\n\n---\n\n';
+        commentCount++;
+        return;
+      }
+
+      // Check for reference events (e.g., "added a commit that referenced this pull request")
+      const refCommit = item.querySelector('.TimelineItem-body[id^="ref-commit"]');
+      if (refCommit) {
+        const actorEl = item.querySelector('.author.Link--primary, a[href*="/apps/"]');
+        let actor = 'Unknown';
+        let isBot = false;
+
+        if (actorEl) {
+          actor = actorEl.textContent.trim() || actorEl.getAttribute('href').replace('/apps/', '');
+          isBot = actorEl.getAttribute('href')?.includes('/apps/');
+        }
+
+        // Get the description and links
+        const codeEl = refCommit.querySelector('.mt-3 code');
+        if (codeEl) {
+          const userMention = codeEl.querySelector('.user-mention');
+          const titleLink = codeEl.querySelector('a.markdown-title');
+          const issueLink = codeEl.querySelector('.issue-link');
+          const shaLink = refCommit.querySelector('.mt-3 code a.Link--secondary');
+
+          if (userMention && titleLink) {
+            const userName = userMention.textContent.trim();
+            const userUrl = userMention.getAttribute('href');
+            const title = titleLink.textContent.trim();
+            const titleUrl = titleLink.getAttribute('href');
+            const issue = issueLink ? issueLink.textContent.trim() : '';
+            const issueUrl = issueLink ? issueLink.getAttribute('href') : '';
+            const sha = shaLink ? shaLink.textContent.trim() : '';
+
+            let refEntry = `**${actor}**`;
+            if (isBot) refEntry += ' bot';
+            refEntry += ' added a commit that referenced this pull request';
+
+            if (includeTimestamps) {
+              const timestampEl = item.querySelector('relative-time');
+              if (timestampEl) {
+                refEntry += ` ${formatDate(timestampEl.getAttribute('datetime'))}`;
+              }
+            }
+            refEntry += '\n\n';
+
+            // Build the reference line
+            const fullUserUrl = userUrl?.startsWith('/') ? 'https://github.com' + userUrl : userUrl;
+            const fullTitleUrl = titleUrl?.startsWith('/') ? 'https://github.com' + titleUrl : titleUrl;
+
+            refEntry += `[${userName}](${fullUserUrl}) [${title}](${fullTitleUrl})`;
+            if (issue && issueUrl) {
+              refEntry += ` [${issue}](${issueUrl})`;
+            }
+            if (sha) {
+              refEntry += ` \`${sha}\``;
+            }
+            refEntry += '\n\n---\n\n';
+
+            markdownResult += refEntry;
+          }
+        }
+        return;
+      }
+    });
+
+    // ========================================
+    // 3. Extract Merge Info
+    // ========================================
+    const mergeBox = doc.querySelector('[data-testid="mergebox-partial"], .merge-pr');
+    if (mergeBox) {
+      markdownResult += '## Merge info\n\n';
+
+      // Review status
+      const reviewSection = mergeBox.querySelector('section[aria-label="Reviews"]');
+      if (reviewSection) {
+        const reviewTitle = reviewSection.querySelector('h3');
+        const reviewDesc = reviewSection.querySelector('p.fgColor-muted');
+
+        if (reviewTitle) {
+          markdownResult += `### ${reviewTitle.textContent.trim()}\n\n`;
+        }
+        if (reviewDesc) {
+          markdownResult += `${reviewDesc.textContent.trim()}\n\n`;
+        }
+      }
+
+      // Checks status
+      const checksSection = mergeBox.querySelector('section[aria-label="Checks"]');
+      if (checksSection) {
+        const checksTitle = checksSection.querySelector('h3');
+        const checksDesc = checksSection.querySelector('p.fgColor-muted');
+
+        if (checksTitle) {
+          markdownResult += `### ${checksTitle.textContent.trim()}\n\n`;
+        }
+        if (checksDesc) {
+          markdownResult += `${checksDesc.textContent.trim()}\n\n`;
+        }
+
+        // Get individual checks
+        const checkItems = checksSection.querySelectorAll('li[aria-label]');
+        if (checkItems.length > 0) {
+          markdownResult += '<details>\n<summary>Show all checks</summary>\n\n';
+
+          checkItems.forEach((checkItem) => {
+            const label = checkItem.getAttribute('aria-label');
+            if (label) {
+              // Parse the label to extract name and status
+              const titleEl = checkItem.querySelector('.Title-module__heading--s7YnL a span');
+              const descEl = checkItem.querySelector('.StatusCheckRow-module__titleDescription--sgUXB span');
+              const requiredEl = checkItem.querySelector('.StatusCheckRow-module__requiredLabel--cYbp_');
+
+              const name = titleEl ? titleEl.textContent.trim() : label.split(' successful')[0];
+              const desc = descEl ? descEl.textContent.trim() : '';
+              const isRequired = !!requiredEl;
+
+              // Determine if successful (from aria-label)
+              const isSuccess = label.toLowerCase().includes('successful');
+              const emoji = isSuccess ? '✅' : '❌';
+
+              let checkLine = `- ${emoji} ${name}`;
+              if (desc) {
+                checkLine += ` — ${desc}`;
+              }
+              if (isRequired) {
+                checkLine += ' **Required**';
+              }
+              checkLine += '\n';
+
+              markdownResult += checkLine;
+            }
+          });
+
+          markdownResult += '\n</details>\n';
+        }
+      }
+    }
+
+    // If no content found, return error
+    if (commentCount === 0 && !mergeBox) {
+      return {
+        markdown: '',
+        commentCount: 0,
+        error: 'No pull request content found. Make sure you are on a GitHub pull request page.'
+      };
+    }
+
+    return {
+      markdown: markdownResult.trim(),
+      commentCount: commentCount,
+      error: null
+    };
+  } catch (err) {
+    return {
+      markdown: '',
+      commentCount: 0,
+      error: `Parse error: ${err.message}`
+    };
+  }
+}
+
+/**
  * Extract markdown from a comment body element
  * @param {Element} element - The DOM element containing comment content
  * @returns {string} - Markdown string
@@ -380,6 +675,27 @@ function processNode(node) {
   }
 
   const tag = node.tagName.toLowerCase();
+
+  // Handle details blocks (collapsible content)
+  if (tag === 'details') {
+    const summary = node.querySelector('summary');
+    const summaryText = summary ? summary.textContent.trim() : 'Details';
+    let content = '<details>\n<summary>' + summaryText + '</summary>\n\n';
+    // Process non-summary children
+    for (let child of node.childNodes) {
+      if (child.tagName?.toLowerCase() !== 'summary') {
+        content += processNode(child);
+      }
+    }
+    content += '\n</details>\n';
+    return content;
+  }
+
+  // Handle video elements
+  if (tag === 'video') {
+    const src = node.getAttribute('src') || '';
+    return `[Video](${src})\n`;
+  }
 
   // Handle code blocks specially to preserve formatting
   if (tag === 'pre') {
@@ -539,7 +855,9 @@ if (typeof window !== 'undefined') {
   window.GitHubToMarkdown = {
     parse: parseGitHubDiscussionHTML,
     parseIssue: parseGitHubIssueHTML,
+    parsePullRequest: parsePullRequest,
     extractMarkdownFromBody,
     processNode
   };
 }
+

@@ -151,16 +151,17 @@ async function fetchMarkdown() {
     // Check if we're on GitHub
     if (!tab.url || !tab.url.includes('github.com')) {
       setStatus('warning', '⚠️', 'Navigate to a GitHub page');
-      markdownTextarea.placeholder = 'This extension works on GitHub discussions and issues.\n\nNavigate to a GitHub discussion or issue page and try again.';
+      markdownTextarea.placeholder = 'This extension works on GitHub discussions, issues, and pull requests.\n\nNavigate to a supported page and try again.';
       return;
     }
 
-    // Check if it's a supported page (discussion or issue)
+    // Check if it's a supported page (discussion, issue, or pull request)
     const isDiscussion = tab.url.includes('/discussions/');
     const isIssue = tab.url.includes('/issues/');
-    if (!isDiscussion && !isIssue) {
-      setStatus('warning', '⚠️', 'Not a discussion or issue page');
-      markdownTextarea.placeholder = 'This page is not a GitHub discussion or issue.\n\nNavigate to a discussion (/discussions/) or issue (/issues/) page to convert it to markdown.';
+    const isPullRequest = tab.url.includes('/pull/');
+    if (!isDiscussion && !isIssue && !isPullRequest) {
+      setStatus('warning', '⚠️', 'Not a supported page');
+      markdownTextarea.placeholder = 'This page is not a GitHub discussion, issue, or pull request.\n\nNavigate to a discussion (/discussions/), issue (/issues/), or pull request (/pull/) page to convert it to markdown.';
       return;
     }
 
