@@ -141,6 +141,34 @@ Tests use real HTML examples to verify:
 - Pull request elements (commits, merge info, checks)
 - Error handling
 
+### Packaging for Chrome Web Store
+
+Create a production zip from the extension files:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\package-extension.ps1
+```
+
+Or use npm:
+
+```bash
+npm run package
+```
+
+This creates:
+
+- `dist/github-to-markdown-v<manifest-version>.zip`
+
+The package includes only the files needed by the extension:
+
+- `manifest.json`
+- `background.js`
+- `content.js`
+- `parser.js`
+- `injector.js`
+- `popup/`
+- `icons/`
+
 ## License
 
 MIT License.

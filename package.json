@@ -6,7 +6,8 @@
     "test": "node tests/parser.test.js && node tests/issue-parser.test.js && node tests/pr-parser.test.js",
     "test:discussion": "node tests/parser.test.js",
     "test:issue": "node tests/issue-parser.test.js",
-    "test:pr": "node tests/pr-parser.test.js"
+    "test:pr": "node tests/pr-parser.test.js",
+    "package": "powershell -ExecutionPolicy Bypass -File ./scripts/package-extension.ps1"
   },
   "devDependencies": {
     "jsdom": "^24.0.0"
