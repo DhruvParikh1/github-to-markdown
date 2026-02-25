@@ -56,22 +56,24 @@
 
   // Get the issue HTML container
   function getIssueHTML() {
-    // Primary selector from issue page structure
     const issueContainer = document.querySelector(
-      '.IssueViewer-module__contentArea--IpMnd, [data-testid="issue-viewer-issue-container"]'
+      '[data-testid="issue-viewer-issue-container"], .IssueViewer-module__contentArea--IpMnd'
     );
-    if (issueContainer) {
-      return issueContainer.outerHTML;
+    const commentsContainer = document.querySelector('[data-testid="issue-viewer-comments-container"]');
+
+    // New GitHub issue pages split description and activity into separate containers.
+    // Capture both so the parser can include the full conversation.
+    if (issueContainer || commentsContainer) {
+      const wrapper = document.createElement('div');
+      if (issueContainer) wrapper.appendChild(issueContainer.cloneNode(true));
+      if (commentsContainer) wrapper.appendChild(commentsContainer.cloneNode(true));
+      return wrapper.outerHTML;
     }
 
-    // Fallback: try to get the comments container
-    const commentsContainer = document.querySelector('[data-testid="issue-viewer-comments-container"]');
-    if (commentsContainer) {
-      // Get parent to include issue body
-      const parent = commentsContainer.closest('[data-testid="issue-viewer-issue-container"]');
-      if (parent) {
-        return parent.outerHTML;
-      }
+    // Fallback: capture just the timeline if present
+    const timeline = document.querySelector('[data-testid="issue-timeline-container"]');
+    if (timeline) {
+      return timeline.outerHTML;
     }
 
     return null;

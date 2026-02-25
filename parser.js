@@ -210,7 +210,7 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
     // ========================================
     // 2. Process Timeline Events and Comments
     // ========================================
-    const timelineContainer = doc.querySelector('[data-testid="issue-timeline-container"]');
+    const timelineContainer = doc.querySelector('[data-testid="issue-timeline-container"], [data-testid="issue-viewer-comments-container"]');
 
     if (timelineContainer) {
       // Get all timeline elements (events and comments)
@@ -258,7 +258,9 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
           header += editInfo;
 
           // Get body content
-          const bodyContent = element.querySelector('.IssueCommentViewer-module__IssueCommentBody--xvkt3 .markdown-body');
+          const bodyContent = element.querySelector(
+            '[data-testid="markdown-body"], .IssueCommentViewer-module__IssueCommentBody .markdown-body, .markdown-body'
+          );
           const body = bodyContent ? extractMarkdownFromBody(bodyContent) : '';
 
           markdownResult += header + '\n\n' + body + '\n\n---\n\n';
