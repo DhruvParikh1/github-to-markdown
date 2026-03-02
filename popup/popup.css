@@ -651,7 +651,6 @@ body {
     color: var(--text-tertiary);
 }
 
-.select-input,
 .text-input {
     width: 100%;
     border: 1px solid var(--border-medium);
@@ -665,10 +664,96 @@ body {
     transition: border-color var(--transition), box-shadow var(--transition);
 }
 
-.select-input:focus-visible,
 .text-input:focus-visible {
     border-color: var(--indigo-500);
     box-shadow: 0 0 0 3px var(--indigo-50);
+}
+
+/* ==========================================
+   SETTINGS CUSTOM SELECT DROPDOWNS
+   ========================================== */
+.setting-select-wrap {
+    position: relative;
+}
+
+.setting-select-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 7px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color var(--transition), box-shadow var(--transition);
+    text-align: left;
+}
+
+.setting-select-btn:hover {
+    border-color: var(--border-dark);
+}
+
+.setting-select-btn:focus-visible {
+    outline: none;
+    border-color: var(--indigo-500);
+    box-shadow: 0 0 0 3px var(--indigo-50);
+}
+
+.setting-select-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.setting-select-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 150;
+    overflow: hidden;
+    padding: 3px;
+}
+
+.setting-select-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--transition);
+}
+
+.setting-select-option:hover {
+    background: var(--bg-hover);
+}
+
+.setting-select-option[aria-selected="true"] {
+    color: var(--indigo-600);
+    font-weight: var(--weight-medium);
+}
+
+@media (prefers-color-scheme: dark) {
+    .setting-select-option[aria-selected="true"] {
+        color: var(--indigo-400);
+    }
 }
 
 /* Toggle Switch */

@@ -237,26 +237,62 @@
               </div>
               <span class="setting-desc">Control timeline event detail in export</span>
             </div>
-            <select id="event-verbosity" class="select-input">
-              <option value="full">Full</option>
-              <option value="important">Important Only</option>
-              <option value="none">Comments Only</option>
-            </select>
+            <div class="setting-select-wrap" id="event-verbosity-wrap">
+              <button type="button" class="setting-select-btn" id="event-verbosity-btn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="setting-select-label" id="event-verbosity-label">Full</span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="setting-select-menu hidden" id="event-verbosity-menu" role="listbox">
+                <button class="setting-select-option" data-value="full" role="option">Full</button>
+                <button class="setting-select-option" data-value="important" role="option">Important Only</button>
+                <button class="setting-select-option" data-value="none" role="option">Comments Only</button>
+              </div>
+            </div>
           </div>
 
-          <label class="setting-item setting-item-column">
+          <div class="setting-item setting-item-column">
             <div class="setting-info">
-              <span class="setting-title">Export Preset</span>
+              <div class="setting-title-row">
+                <span class="setting-title">Export Preset</span>
+                <span class="tooltip-wrap">
+                  <button type="button" class="info-btn" aria-label="Export preset help"
+                    aria-describedby="export-preset-tooltip">
+                    <svg width="3" height="8" viewBox="0 0 3 8" fill="currentColor" aria-hidden="true">
+                      <circle cx="1.5" cy="1" r="1"/>
+                      <rect x="0.75" y="3" width="1.5" height="5" rx="0.75"/>
+                    </svg>
+                  </button>
+                  <span id="export-preset-tooltip" class="setting-tooltip" role="tooltip">
+                    <strong>Standard:</strong> plain markdown, optionally with a title heading.<br>
+                    <strong>LLM Context:</strong> wraps the thread with metadata and usage notes for AI summarization.<br>
+                    <strong>Changelog:</strong> scaffold with Highlights and Breaking Changes sections around the thread.<br>
+                    <strong>Incident Report:</strong> structured report with Summary, Timeline, Impact, and Follow-up Actions.<br>
+                    <strong>Meeting Notes:</strong> frames the thread with Agenda, Decisions, and Action Items sections.
+                  </span>
+                </span>
+              </div>
               <span class="setting-desc">Choose output template style</span>
             </div>
-            <select id="export-preset" class="select-input">
-              <option value="standard">Standard</option>
-              <option value="llm_context">LLM Context</option>
-              <option value="changelog">Changelog</option>
-              <option value="incident_report">Incident Report</option>
-              <option value="meeting_notes">Meeting Notes</option>
-            </select>
-          </label>
+            <div class="setting-select-wrap" id="export-preset-wrap">
+              <button type="button" class="setting-select-btn" id="export-preset-btn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="setting-select-label" id="export-preset-label">Standard</span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="setting-select-menu hidden" id="export-preset-menu" role="listbox">
+                <button class="setting-select-option" data-value="standard" role="option">Standard</button>
+                <button class="setting-select-option" data-value="llm_context" role="option">LLM Context</button>
+                <button class="setting-select-option" data-value="changelog" role="option">Changelog</button>
+                <button class="setting-select-option" data-value="incident_report" role="option">Incident Report</button>
+                <button class="setting-select-option" data-value="meeting_notes" role="option">Meeting Notes</button>
+              </div>
+            </div>
+          </div>
 
           <label class="setting-item">
             <div class="setting-info">

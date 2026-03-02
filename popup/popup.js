@@ -12,8 +12,11 @@ let refreshBtn, copyBtn, copyBtnText;
 let copyFrontmatterBtn, copyFrontmatterBtnText, downloadBtn;
 let sendToBtn, sendToMenu, customTargetsMenuItems, addOwnBtn;
 let includeTitleCheckbox, includeTimestampsCheckbox, includeNestedCheckbox;
-let includeBotCommentsCheckbox, eventVerbositySelect;
-let showPageButtonCheckbox, exportPresetSelect, defaultCopyFrontmatterCheckbox;
+let includeBotCommentsCheckbox;
+let showPageButtonCheckbox, defaultCopyFrontmatterCheckbox;
+// Custom select state
+let eventVerbosityValue = 'full';
+let exportPresetValue = 'standard';
 let enableKeyboardShortcutCheckbox, enableContextMenuCheckbox;
 let enterpriseHostsInput;
 let customTargetsList, customTargetNameInput, customTargetUrlInput, addCustomTargetBtn;
@@ -79,9 +82,7 @@ async function init() {
   includeTimestampsCheckbox = document.getElementById('include-timestamps');
   includeNestedCheckbox = document.getElementById('include-nested');
   includeBotCommentsCheckbox = document.getElementById('include-bot-comments');
-  eventVerbositySelect = document.getElementById('event-verbosity');
   showPageButtonCheckbox = document.getElementById('show-page-button');
-  exportPresetSelect = document.getElementById('export-preset');
   defaultCopyFrontmatterCheckbox = document.getElementById('default-copy-frontmatter');
   enableKeyboardShortcutCheckbox = document.getElementById('enable-keyboard-shortcut');
   enableContextMenuCheckbox = document.getElementById('enable-context-menu');
@@ -110,6 +111,9 @@ async function init() {
   // Attach navigation event listeners
   setupNavigation();
 
+  // Set up custom select dropdowns in settings
+  setupSettingSelects();
+
   // Attach button event listeners
   refreshBtn.addEventListener('click', fetchMarkdown);
   copyBtn.addEventListener('click', () => copyToClipboard(false));
@@ -133,17 +137,9 @@ async function init() {
     await saveSettings();
     fetchMarkdown();
   });
-  eventVerbositySelect.addEventListener('change', async () => {
-    await saveSettings();
-    fetchMarkdown();
-  });
   showPageButtonCheckbox.addEventListener('change', async () => {
     await saveSettings();
     await notifyContentScriptOfSettings();
-  });
-  exportPresetSelect.addEventListener('change', async () => {
-    await saveSettings();
-    updateMarkdownDisplay();
   });
   defaultCopyFrontmatterCheckbox.addEventListener('change', async () => {
     await saveSettings();
@@ -418,6 +414,84 @@ function setExportActionsEnabled(enabled) {
 }
 
 /**
+ * Set up all custom <select> replacements in the settings panel.
+ * Each descriptor maps a DOM id prefix to a state variable name and onChange callback.
+ */
+function setupSettingSelects() {
+  const selects = [
+    {
+      id: 'event-verbosity',
+      set: (v) => { eventVerbosityValue = v; },
+      onChange: async () => { await saveSettings(); fetchMarkdown(); }
+    },
+    {
+      id: 'export-preset',
+      set: (v) => { exportPresetValue = v; },
+      onChange: async () => { await saveSettings(); updateMarkdownDisplay(); }
+    }
+  ];
+
+  selects.forEach(({ id, set, onChange }) => {
+    const btn = document.getElementById(`${id}-btn`);
+    const menu = document.getElementById(`${id}-menu`);
+    const label = document.getElementById(`${id}-label`);
+    if (!btn || !menu || !label) return;
+
+    function openMenu() {
+      menu.classList.remove('hidden');
+      btn.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeMenu() {
+      menu.classList.add('hidden');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.contains('hidden') ? openMenu() : closeMenu();
+    });
+
+    menu.querySelectorAll('.setting-select-option').forEach(opt => {
+      opt.addEventListener('click', async () => {
+        const value = opt.dataset.value;
+        set(value);
+        // Update label text and aria-selected state
+        label.textContent = opt.textContent;
+        menu.querySelectorAll('.setting-select-option').forEach(o =>
+          o.setAttribute('aria-selected', o === opt ? 'true' : 'false')
+        );
+        closeMenu();
+        await onChange();
+      });
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', closeMenu);
+    menu.addEventListener('click', (e) => e.stopPropagation());
+  });
+}
+
+/**
+ * Set a custom select's displayed value (used when loading settings).
+ */
+function setSettingSelect(id, value) {
+  const menu = document.getElementById(`${id}-menu`);
+  const label = document.getElementById(`${id}-label`);
+  if (!menu || !label) return;
+
+  if (id === 'event-verbosity') eventVerbosityValue = value;
+  if (id === 'export-preset') exportPresetValue = value;
+
+  const opts = menu.querySelectorAll('.setting-select-option');
+  opts.forEach(opt => {
+    const selected = opt.dataset.value === value;
+    opt.setAttribute('aria-selected', selected ? 'true' : 'false');
+    if (selected) label.textContent = opt.textContent;
+  });
+}
+
+/**
  * Setup navigation between views
  */
 function setupNavigation() {
@@ -493,9 +567,9 @@ function collectUiSettings(baseSettings = currentSettings) {
     includeTimestamps: includeTimestampsCheckbox.checked,
     includeNested: includeNestedCheckbox.checked,
     includeBotComments: includeBotCommentsCheckbox.checked,
-    eventVerbosity: eventVerbositySelect.value || 'full',
+    eventVerbosity: eventVerbosityValue || 'full',
     showPageButton: showPageButtonCheckbox.checked,
-    exportPreset: exportPresetSelect.value || 'standard',
+    exportPreset: exportPresetValue || 'standard',
     defaultCopyFrontmatter: defaultCopyFrontmatterCheckbox.checked,
     enableKeyboardShortcut: enableKeyboardShortcutCheckbox.checked,
     enableContextMenu: enableContextMenuCheckbox.checked
@@ -518,9 +592,9 @@ async function loadSettings() {
     includeTimestampsCheckbox.checked = currentSettings.includeTimestamps;
     includeNestedCheckbox.checked = currentSettings.includeNested;
     includeBotCommentsCheckbox.checked = currentSettings.includeBotComments;
-    eventVerbositySelect.value = currentSettings.eventVerbosity || 'full';
+    setSettingSelect('event-verbosity', currentSettings.eventVerbosity || 'full');
     showPageButtonCheckbox.checked = currentSettings.showPageButton;
-    exportPresetSelect.value = currentSettings.exportPreset;
+    setSettingSelect('export-preset', currentSettings.exportPreset || 'standard');
     defaultCopyFrontmatterCheckbox.checked = currentSettings.defaultCopyFrontmatter;
     enableKeyboardShortcutCheckbox.checked = currentSettings.enableKeyboardShortcut !== false;
     enableContextMenuCheckbox.checked = currentSettings.enableContextMenu !== false;
