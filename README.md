@@ -12,11 +12,13 @@ A Chrome extension that converts GitHub discussions, issues, and pull requests t
 
 ## Features
 
-- 📋 **One-click conversion** - Convert any GitHub discussion, issue, or PR to markdown instantly
-- 🔄 **Preserves formatting** - Maintains code blocks, lists, headers, links, and more
-- 💬 **Nested replies** - Properly indents nested comment threads
-- ⚙️ **Configurable** - Toggle timestamps and nested replies on/off
-- 🌙 **Dark mode** - Automatically matches your system theme
+- **One-click conversion** - Convert any GitHub discussion, issue, or PR to markdown instantly
+- **Preserves formatting** - Maintains code blocks, lists, headers, links, and more
+- **Nested replies** - Properly indents nested comment threads
+- **Configurable** - Toggle timestamps, bot comments, and event verbosity
+- **Export options** - Presets, frontmatter copy, and `.md` download
+- **Power tools** - Optional keyboard shortcut and context menu quick copy
+- **Dark mode** - Automatically matches your system theme
 
 ## Installation
 
@@ -42,13 +44,30 @@ A Chrome extension that converts GitHub discussions, issues, and pull requests t
 ### Using the Page Button
 
 1. Navigate to any GitHub discussion, issue, or pull request page
-2. Look for the **📋 Copy as Markdown** button near the header
+2. Look for the **Copy as Markdown** button near the header
 3. Click it to copy the content directly to your clipboard
 
 ## Settings
 
 - **Include timestamps** - Toggle to show/hide comment timestamps
 - **Include nested replies** - Toggle to show/hide nested reply threads
+- **Include bot comments** - Include/exclude bot-authored comments
+- **Event verbosity** - `Full`, `Important only`, or `Comments only`
+- **Keyboard shortcut** - Enable/disable quick copy via `Ctrl/Cmd+Shift+M`
+- **Context menu** - Enable/disable right-click quick copy action
+
+### Event Verbosity Modes
+
+- **Full**
+  Includes comments plus timeline events.
+  Issue pages include events like labels and title changes.
+  PR pages include commit/reference timeline entries and merge/check details.
+- **Important only**
+  Includes comments plus high-signal timeline events.
+  Issue pages keep title changes and skip label churn.
+  PR pages keep merge summary and skip commit/reference noise.
+- **Comments only**
+  Exports comments only and hides timeline events.
 
 ## Supported Conversions
 
@@ -91,10 +110,10 @@ Another top-level comment.
 
 This extension currently supports **GitHub Discussions, Issues, and Pull Requests**. The following are planned for future releases:
 
-- ✅ GitHub Discussions
-- ✅ GitHub Issues
-- ✅ Pull Requests (Commits, Comments, Merge Info)
-- ❌ Release notes
+- [x] GitHub Discussions
+- [x] GitHub Issues
+- [x] Pull Requests (Commits, Comments, Merge Info)
+- [ ] Release notes
 
 ## Troubleshooting
 
@@ -115,10 +134,10 @@ This means no markdown was found. Make sure you're on a valid GitHub page with c
 ## Privacy
 
 This extension:
-- ✅ Only runs on `github.com`
-- ✅ Never transmits any data
-- ✅ Processes everything locally
-- ✅ Requires minimal permissions
+- [x] Only runs on `github.com` and configured enterprise hosts
+- [x] Never transmits any data
+- [x] Processes everything locally
+- [x] Requires minimal permissions
 
 ## Development
 

@@ -141,6 +141,37 @@ function parseGitHubDiscussionHTML(htmlString, options = {}) {
   }
 }
 
+function normalizeEventVerbosity(value) {
+  if (value === 'none' || value === 'important') {
+    return value;
+  }
+  return 'full';
+}
+
+function isLikelyBotAuthor(author, element) {
+  const normalizedAuthor = String(author || '').trim().toLowerCase();
+  if (!normalizedAuthor) return false;
+  if (normalizedAuthor.endsWith('[bot]')) return true;
+  if (normalizedAuthor.includes('github-actions')) return true;
+
+  const href = element?.getAttribute?.('href') || '';
+  if (href.includes('/apps/')) return true;
+  if (href.includes('[bot]')) return true;
+  return false;
+}
+
+function shouldIncludeEvent(eventType, eventVerbosity) {
+  if (eventVerbosity === 'none') {
+    return false;
+  }
+  if (eventVerbosity === 'full') {
+    return true;
+  }
+
+  // important
+  return eventType === 'title-change' || eventType === 'merge-info';
+}
+
 /**
  * Parser function for GitHub Issues - converts issue HTML to markdown
  * @param {string} htmlString - The HTML string to parse
@@ -149,7 +180,12 @@ function parseGitHubDiscussionHTML(htmlString, options = {}) {
  * @returns {Object} - { markdown: string, commentCount: number, error: string|null }
  */
 function parseGitHubIssueHTML(htmlString, options = {}) {
-  const { includeTimestamps = true } = options;
+  const {
+    includeTimestamps = true,
+    includeBotComments = true,
+    eventVerbosity = 'full'
+  } = options;
+  const resolvedEventVerbosity = normalizeEventVerbosity(eventVerbosity);
 
   try {
     const parser = new DOMParser();
@@ -157,6 +193,7 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
 
     let markdownResult = '';
     let commentCount = 0;
+    let hasAnyContent = false;
 
     // Helper to format date
     const formatDate = (dateStr) => {
@@ -177,18 +214,20 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
       // Get author
       const authorEl = doc.querySelector('[data-testid="issue-body-header-author"]');
       const author = authorEl ? authorEl.textContent.trim() : 'Unknown';
+      const isBotAuthor = isLikelyBotAuthor(author, authorEl);
 
       // Get timestamp
       const timestampEl = issueBody.querySelector('relative-time');
       const timestamp = timestampEl ? timestampEl.getAttribute('datetime') : '';
 
+      if (includeBotComments || !isBotAuthor) {
       // Get edit info
       const editContainer = issueBody.querySelector('.MarkdownLastEditedBy-module__lastEditInfoContainer--EN_Qz');
       let editInfo = '';
       if (editContainer) {
         const editorLink = editContainer.querySelector('a');
         if (editorLink) {
-          editInfo = ` · edited by ${editorLink.textContent.trim()}`;
+            editInfo = ` - edited by ${editorLink.textContent.trim()}`;
         }
       }
 
@@ -205,6 +244,8 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
 
       markdownResult += header + '\n\n' + body + '\n\n---\n\n';
       commentCount++;
+      hasAnyContent = true;
+      }
     }
 
     // ========================================
@@ -220,11 +261,14 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
         // Check if it's a comment
         const comment = element.querySelector('.react-issue-comment');
         if (comment) {
-          commentCount++;
-
           // Get author
           const authorEl = element.querySelector('[data-testid="avatar-link"], .ActivityHeader-module__AuthorLink--D7Ojk');
           const author = authorEl ? authorEl.textContent.trim() : 'Unknown';
+          const isBotAuthor = isLikelyBotAuthor(author, authorEl);
+          if (!includeBotComments && isBotAuthor) {
+            return;
+          }
+          commentCount++;
 
           // Get role (Collaborator or Author)
           let role = '';
@@ -246,7 +290,7 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
           if (editContainer) {
             const editorLink = editContainer.querySelector('a');
             if (editorLink) {
-              editInfo = ` · edited by ${editorLink.textContent.trim()}`;
+              editInfo = ` - edited by ${editorLink.textContent.trim()}`;
             }
           }
 
@@ -264,12 +308,17 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
           const body = bodyContent ? extractMarkdownFromBody(bodyContent) : '';
 
           markdownResult += header + '\n\n' + body + '\n\n---\n\n';
+          hasAnyContent = true;
           return;
         }
 
         // Check if it's a label event
         const labelContainer = element.querySelector('.labels-module__labelContainer--gEfYq');
         if (labelContainer) {
+          if (!shouldIncludeEvent('label', resolvedEventVerbosity)) {
+            return;
+          }
+
           const actorEl = element.querySelector('[data-testid="actor-link"] .row-module__eventProfileReference--CiANK');
           const actor = actorEl ? actorEl.textContent.trim() : 'Unknown';
 
@@ -290,12 +339,17 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
           }
 
           markdownResult += eventText + '\n\n---\n\n';
+          hasAnyContent = true;
           return;
         }
 
         // Check if it's a title rename event
         const titleChange = element.querySelector('.RenamedTitleEvent-module__defaultColor--yf7kG');
         if (titleChange) {
+          if (!shouldIncludeEvent('title-change', resolvedEventVerbosity)) {
+            return;
+          }
+
           const actorEl = element.querySelector('[data-testid="actor-link"] .row-module__eventProfileReference--CiANK');
           const actor = actorEl ? actorEl.textContent.trim() : 'Unknown';
 
@@ -317,13 +371,14 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
           }
 
           markdownResult += eventText + '\n\n---\n\n';
+          hasAnyContent = true;
           return;
         }
       });
     }
 
     // If no content found, return error
-    if (commentCount === 0) {
+    if (!hasAnyContent) {
       return {
         markdown: '',
         commentCount: 0,
@@ -353,7 +408,12 @@ function parseGitHubIssueHTML(htmlString, options = {}) {
  * @returns {Object} - { markdown: string, commentCount: number, error: string|null }
  */
 function parsePullRequest(htmlString, options = {}) {
-  const { includeTimestamps = true } = options;
+  const {
+    includeTimestamps = true,
+    includeBotComments = true,
+    eventVerbosity = 'full'
+  } = options;
+  const resolvedEventVerbosity = normalizeEventVerbosity(eventVerbosity);
 
   try {
     const parser = new DOMParser();
@@ -361,6 +421,7 @@ function parsePullRequest(htmlString, options = {}) {
 
     let markdownResult = '';
     let commentCount = 0;
+    let hasAnyContent = false;
 
     // Helper to format date
     const formatDate = (dateStr) => {
@@ -381,22 +442,26 @@ function parsePullRequest(htmlString, options = {}) {
       // Get author from pr body header
       const authorEl = doc.querySelector('.author.Link--primary');
       const author = authorEl ? authorEl.textContent.trim() : 'Unknown';
+      const isBotAuthor = isLikelyBotAuthor(author, authorEl);
 
       // Get timestamp
       const timestampEl = doc.querySelector('.timeline-comment-header relative-time, .js-comment-container relative-time');
       const timestamp = timestampEl ? timestampEl.getAttribute('datetime') : '';
 
-      // Build header
-      let header = `**${author}** commented`;
-      if (includeTimestamps && timestamp) {
-        header += ` ${formatDate(timestamp)}`;
+      if (includeBotComments || !isBotAuthor) {
+        // Build header
+        let header = `**${author}** commented`;
+        if (includeTimestamps && timestamp) {
+          header += ` ${formatDate(timestamp)}`;
+        }
+
+        // Get body content
+        const body = extractMarkdownFromBody(prBody);
+
+        markdownResult += header + '\n\n' + body + '\n\n---\n\n';
+        commentCount++;
+        hasAnyContent = true;
       }
-
-      // Get body content
-      const body = extractMarkdownFromBody(prBody);
-
-      markdownResult += header + '\n\n' + body + '\n\n---\n\n';
-      commentCount++;
     }
 
     // ========================================
@@ -413,6 +478,10 @@ function parsePullRequest(htmlString, options = {}) {
       // Check for commit entries
       const commitLink = item.querySelector('.TimelineItem-body code a.Link--secondary[href*="/commits/"]');
       if (commitLink) {
+        if (!shouldIncludeEvent('commit', resolvedEventVerbosity)) {
+          return;
+        }
+
         const commitMessage = item.querySelector('.TimelineItem-body code a.markdown-title');
         const avatarLink = item.querySelector('.AvatarStack-body a');
 
@@ -434,6 +503,7 @@ function parsePullRequest(htmlString, options = {}) {
           commitEntry += `[${message}](${fullUrl}) \`${sha}\`\n\n---\n\n`;
 
           markdownResult += commitEntry;
+          hasAnyContent = true;
           return;
         }
       }
@@ -447,7 +517,11 @@ function parsePullRequest(htmlString, options = {}) {
 
         if (authorEl) {
           author = authorEl.textContent.trim() || authorEl.getAttribute('href').replace('/apps/', '');
-          isBot = authorEl.getAttribute('href')?.includes('/apps/');
+          isBot = isLikelyBotAuthor(author, authorEl);
+        }
+
+        if (!includeBotComments && isBot) {
+          return;
         }
 
         // Check for Author role badge
@@ -462,7 +536,7 @@ function parsePullRequest(htmlString, options = {}) {
         let editInfo = '';
         const editedEl = item.querySelector('.js-comment-edit-history');
         if (editedEl) {
-          editInfo = ' • edited';
+          editInfo = ' - edited';
         }
 
         // Build header
@@ -480,12 +554,17 @@ function parsePullRequest(htmlString, options = {}) {
 
         markdownResult += header + '\n\n' + body + '\n\n---\n\n';
         commentCount++;
+        hasAnyContent = true;
         return;
       }
 
       // Check for reference events (e.g., "added a commit that referenced this pull request")
       const refCommit = item.querySelector('.TimelineItem-body[id^="ref-commit"]');
       if (refCommit) {
+        if (!shouldIncludeEvent('reference', resolvedEventVerbosity)) {
+          return;
+        }
+
         const actorEl = item.querySelector('.author.Link--primary, a[href*="/apps/"]');
         let actor = 'Unknown';
         let isBot = false;
@@ -538,6 +617,7 @@ function parsePullRequest(htmlString, options = {}) {
             refEntry += '\n\n---\n\n';
 
             markdownResult += refEntry;
+            hasAnyContent = true;
           }
         }
         return;
@@ -548,8 +628,9 @@ function parsePullRequest(htmlString, options = {}) {
     // 3. Extract Merge Info
     // ========================================
     const mergeBox = doc.querySelector('[data-testid="mergebox-partial"], .merge-pr');
-    if (mergeBox) {
+    if (mergeBox && shouldIncludeEvent('merge-info', resolvedEventVerbosity)) {
       markdownResult += '## Merge info\n\n';
+      hasAnyContent = true;
 
       // Review status
       const reviewSection = mergeBox.querySelector('section[aria-label="Reviews"]');
@@ -578,9 +659,9 @@ function parsePullRequest(htmlString, options = {}) {
           markdownResult += `${checksDesc.textContent.trim()}\n\n`;
         }
 
-        // Get individual checks
+        // Get individual checks for full verbosity only
         const checkItems = checksSection.querySelectorAll('li[aria-label]');
-        if (checkItems.length > 0) {
+        if (resolvedEventVerbosity === 'full' && checkItems.length > 0) {
           markdownResult += '<details>\n<summary>Show all checks</summary>\n\n';
 
           checkItems.forEach((checkItem) => {
@@ -597,11 +678,11 @@ function parsePullRequest(htmlString, options = {}) {
 
               // Determine if successful (from aria-label)
               const isSuccess = label.toLowerCase().includes('successful');
-              const emoji = isSuccess ? '✅' : '❌';
+              const statusText = isSuccess ? '\u2705' : '\u274C';
 
-              let checkLine = `- ${emoji} ${name}`;
+              let checkLine = `- ${statusText} ${name}`;
               if (desc) {
-                checkLine += ` — ${desc}`;
+                checkLine += ` \u2014 ${desc}`;
               }
               if (isRequired) {
                 checkLine += ' **Required**';
@@ -618,7 +699,7 @@ function parsePullRequest(htmlString, options = {}) {
     }
 
     // If no content found, return error
-    if (commentCount === 0 && !mergeBox) {
+    if (!hasAnyContent) {
       return {
         markdown: '',
         commentCount: 0,
@@ -660,6 +741,63 @@ function extractMarkdownFromBody(element) {
   return result
     .replace(/\n\n+/g, '\n\n')
     .trim();
+}
+
+function normalizeInlineMarkdown(text) {
+  return String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function escapeMarkdownTableCell(text) {
+  return normalizeInlineMarkdown(text)
+    .replace(/\|/g, '\\|');
+}
+
+function convertTableToMarkdown(tableEl) {
+  if (!tableEl) return '';
+
+  // GitHub uses presentation tables for non-table markdown UI (e.g., comment wrappers).
+  if (tableEl.getAttribute('data-paste-markdown-skip') !== null) {
+    return '';
+  }
+  if (tableEl.getAttribute('role') === 'presentation') {
+    return '';
+  }
+
+  const rows = Array.from(tableEl.querySelectorAll('tr'))
+    .map((row) => Array.from(row.children).filter((cell) => {
+      const tag = cell.tagName.toLowerCase();
+      return tag === 'th' || tag === 'td';
+    }))
+    .filter((cells) => cells.length > 0);
+
+  if (!rows.length) {
+    return '';
+  }
+
+  const tableRows = rows.map((cells) => cells.map((cell) => {
+    let content = '';
+    for (const child of cell.childNodes) {
+      content += processNode(child);
+    }
+    return escapeMarkdownTableCell(content);
+  }));
+
+  const headerCells = tableRows[0];
+  const bodyRows = tableRows.slice(1);
+  const columnCount = headerCells.length;
+  const separator = Array.from({ length: columnCount }, () => '---');
+
+  const lines = [];
+  lines.push(`| ${headerCells.join(' | ')} |`);
+  lines.push(`| ${separator.join(' | ')} |`);
+  bodyRows.forEach((row) => {
+    const padded = row.concat(Array.from({ length: Math.max(0, columnCount - row.length) }, () => ''));
+    lines.push(`| ${padded.join(' | ')} |`);
+  });
+
+  return `\n${lines.join('\n')}\n`;
 }
 
 /**
@@ -724,6 +862,10 @@ function processNode(node) {
 
   if (tag === 'em' || tag === 'i') {
     return '_' + node.textContent + '_';
+  }
+
+  if (tag === 'del' || tag === 's' || tag === 'strike') {
+    return '~~' + node.textContent + '~~';
   }
 
   if (tag === 'h1') {
@@ -803,6 +945,19 @@ function processNode(node) {
       content += processNode(child);
     }
     return content;
+  }
+
+  if (tag === 'input') {
+    const type = (node.getAttribute('type') || '').toLowerCase();
+    if (type === 'checkbox') {
+      const checked = node.hasAttribute('checked') || node.checked === true;
+      return checked ? '[x] ' : '[ ] ';
+    }
+    return '';
+  }
+
+  if (tag === 'table') {
+    return convertTableToMarkdown(node);
   }
 
   if (tag === 'a') {

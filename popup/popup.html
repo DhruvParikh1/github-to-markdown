@@ -6,12 +6,10 @@
   <meta name="viewport" content="width=380, height=560">
   <title>GitHub to Markdown</title>
   <link rel="stylesheet" href="popup.css">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
 </head>
 
 <body>
   <div id="container" class="container">
-    <!-- Header -->
     <header class="header">
       <div class="header-content">
         <svg class="app-icon" width="22" height="22" viewBox="0 0 256 256" fill="none" stroke="currentColor"
@@ -25,15 +23,25 @@
       </div>
       <div class="header-actions">
         <button id="settings-button" class="icon-btn" title="Settings">
-          <i class="fas fa-cog"></i>
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.08a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
+          </svg>
         </button>
         <button id="info-button" class="icon-btn" title="About">
-          <i class="fas fa-info-circle"></i>
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
         </button>
       </div>
     </header>
 
-    <!-- Segmented Navigation Control -->
     <nav class="segmented-control" role="tablist" aria-label="Main navigation">
       <button id="nav-main" class="segment-btn active" role="tab" aria-selected="true" tabindex="0">
         Convert
@@ -46,15 +54,17 @@
       </button>
     </nav>
 
-    <!-- Main View -->
     <div id="main-view" class="view-panel fade-in">
-
-      <!-- Page Info Card -->
       <div id="page-info" class="page-info-card hidden">
         <div class="page-info-row">
           <span class="page-info-label">Page Type</span>
           <span id="page-type-badge" class="page-type-badge">
-            <i class="fas fa-comments"></i>
+            <svg class="badge-icon" width="12" height="12" viewBox="0 0 256 256" fill="none" stroke="currentColor"
+              stroke-width="16" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M32.5,138A72,72,0,1,1,62,167.5l-27.76,8.16a8,8,0,0,1-9.93-9.93Z" />
+              <path
+                d="M163.94,80.11A72,72,0,0,1,223.5,186l8.16,27.76a8,8,0,0,1-9.93,9.93L194,215.5A72.05,72.05,0,0,1,92.06,175.89" />
+            </svg>
             <span id="page-type-text">Discussion</span>
           </span>
         </div>
@@ -64,49 +74,101 @@
         </div>
       </div>
 
-      <!-- Markdown Preview Section -->
       <section class="editor-section">
         <div class="editor-header">
           <span class="editor-label">
-            <i class="fas fa-file-alt"></i>
+            <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 7h16"></path>
+              <path d="M4 12h16"></path>
+              <path d="M4 17h10"></path>
+            </svg>
             Markdown Output
           </span>
-          <span id="char-count" class="char-count"></span>
+          <div class="editor-header-right">
+            <span id="char-count" class="char-count"></span>
+            <button id="refresh-btn" class="editor-refresh-btn" title="Refresh conversion">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.5 9a9 9 0 0 1 14.1-3.4L23 10"></path>
+                <path d="M20.5 15a9 9 0 0 1-14.1 3.4L1 14"></path>
+              </svg>
+            </button>
+          </div>
         </div>
         <textarea id="markdown-output" class="markdown-textarea"
           placeholder="Navigate to a GitHub discussion, issue, or pull request page and click the extension to convert..."
           readonly></textarea>
       </section>
 
-      <!-- Action Buttons -->
       <div class="action-buttons">
         <div class="action-row">
-          <button id="refresh-btn" class="btn" title="Refresh conversion">
-            <i class="fas fa-sync-alt btn-icon"></i>
-            <span>Refresh</span>
-          </button>
+          <div class="send-to-wrap">
+            <button id="send-to-btn" class="btn" disabled title="Send markdown to AI assistant">
+              <svg class="btn-icon icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+              <span>Send To</span>
+              <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <div id="send-to-menu" class="send-to-menu hidden">
+              <button class="send-to-option" data-target="claude">Claude</button>
+              <button class="send-to-option" data-target="chatgpt">ChatGPT</button>
+              <div id="custom-targets-menu-items"></div>
+              <div class="send-to-divider"></div>
+              <button class="send-to-option send-to-add-own" id="add-own-btn">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add Your Own...
+              </button>
+            </div>
+          </div>
           <button id="copy-btn" class="btn btn-primary" disabled title="Copy to clipboard">
-            <i class="fas fa-copy btn-icon"></i>
+            <svg class="btn-icon icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
             <span id="copy-btn-text">Copy</span>
           </button>
         </div>
         <div class="action-row">
           <button id="copy-frontmatter-btn" class="btn" disabled title="Copy markdown with frontmatter">
-            <i class="fas fa-file-signature btn-icon"></i>
+            <svg class="btn-icon icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
             <span id="copy-frontmatter-btn-text">Copy + Frontmatter</span>
           </button>
           <button id="download-btn" class="btn" disabled title="Download as markdown file">
-            <i class="fas fa-download btn-icon"></i>
+            <svg class="btn-icon icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
             <span>Download .md</span>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Settings View -->
     <div id="settings-view" class="view-panel fade-in hidden">
       <div class="settings-content">
-        <!-- Output Settings -->
         <div class="settings-group">
           <div class="settings-group-title">Output Options</div>
 
@@ -143,6 +205,45 @@
             </label>
           </label>
 
+          <label class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Include Bot Comments</span>
+              <span class="setting-desc">Include comments authored by bots</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="include-bot-comments" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </label>
+
+          <div class="setting-item setting-item-column">
+            <div class="setting-info">
+              <div class="setting-title-row">
+                <span class="setting-title">Event Verbosity</span>
+                <span class="tooltip-wrap">
+                  <button type="button" class="info-btn" aria-label="Event verbosity help"
+                    aria-describedby="event-verbosity-tooltip">
+                    <svg width="3" height="8" viewBox="0 0 3 8" fill="currentColor" aria-hidden="true">
+                      <circle cx="1.5" cy="1" r="1"/>
+                      <rect x="0.75" y="3" width="1.5" height="5" rx="0.75"/>
+                    </svg>
+                  </button>
+                  <span id="event-verbosity-tooltip" class="setting-tooltip" role="tooltip">
+                    <strong>Full:</strong> includes comments and full timeline events (labels/title changes on issues, commits/references/merge details on PRs).<br>
+                    <strong>Important only:</strong> keeps comments plus high-signal events (issue title changes, PR merge summary).<br>
+                    <strong>Comments only:</strong> exports comments only and hides timeline events.
+                  </span>
+                </span>
+              </div>
+              <span class="setting-desc">Control timeline event detail in export</span>
+            </div>
+            <select id="event-verbosity" class="select-input">
+              <option value="full">Full</option>
+              <option value="important">Important Only</option>
+              <option value="none">Comments Only</option>
+            </select>
+          </div>
+
           <label class="setting-item setting-item-column">
             <div class="setting-info">
               <span class="setting-title">Export Preset</span>
@@ -169,7 +270,6 @@
           </label>
         </div>
 
-        <!-- Page Integration -->
         <div class="settings-group">
           <div class="settings-group-title">Page Integration</div>
 
@@ -180,6 +280,32 @@
             </div>
             <label class="toggle-switch">
               <input type="checkbox" id="show-page-button" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </label>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">Power Tools</div>
+
+          <label class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Enable Keyboard Shortcut</span>
+              <span class="setting-desc">Use Ctrl/Cmd+Shift+M for quick copy</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="enable-keyboard-shortcut" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </label>
+
+          <label class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Enable Context Menu</span>
+              <span class="setting-desc">Show Copy as Markdown in right-click menu</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="enable-context-menu" checked>
               <span class="toggle-slider"></span>
             </label>
           </label>
@@ -197,10 +323,27 @@
               placeholder="github.mycompany.com, *.ghe.example.com">
           </label>
         </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">Send To Targets</div>
+          <p class="setting-desc" style="padding: 2px 0 4px">Custom URLs for the "Send To" dropdown. Use <code class="inline-code">{prompt}</code> as placeholder.</p>
+          <div id="custom-targets-list" class="custom-targets-list"></div>
+          <div class="custom-target-add">
+            <input type="text" id="custom-target-name" class="text-input" placeholder="Name (e.g. Gemini)">
+            <input type="text" id="custom-target-url" class="text-input" placeholder="https://example.com/?q={prompt}">
+            <button id="add-custom-target-btn" class="btn">
+              <svg class="btn-icon icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- About View -->
     <div id="about-view" class="view-panel fade-in hidden">
       <div class="about-content">
         <div class="about-header">
@@ -260,25 +403,34 @@
 
         <div class="about-footer">
           <a href="https://www.buymeacoffee.com/dhruvparikh" target="_blank" class="coffee-btn">
-            <i class="fas fa-mug-hot"></i> Buy Me a Coffee
+            <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 8h15v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"></path>
+              <path d="M18 10h1a3 3 0 0 1 0 6h-1"></path>
+              <line x1="6" y1="3" x2="6" y2="5"></line>
+              <line x1="10" y1="3" x2="10" y2="5"></line>
+              <line x1="14" y1="3" x2="14" y2="5"></line>
+            </svg>
+            Buy Me a Coffee
           </a>
           <p class="made-with">
-            Made with <span class="heart">❤️</span> for developers
+            Made with <span class="heart" aria-hidden="true">&hearts;</span> for developers
           </p>
         </div>
       </div>
     </div>
 
-    <!-- Footer -->
     <footer class="app-footer">
       <span class="footer-text">
-        <i class="fas fa-check-circle"></i>
-        Supports Discussions · Issues · Pull Requests
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 6L9 17l-5-5"></path>
+        </svg>
+        Supports Discussions / Issues / Pull Requests
       </span>
     </footer>
   </div>
 
-  <!-- Toast Container -->
   <div id="toast-container"></div>
 
   <script src="popup.js"></script>

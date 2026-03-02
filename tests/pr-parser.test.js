@@ -254,7 +254,7 @@ test('Should include individual check items in details', () => {
   assertIncludes(result.markdown, 'cargo-deny', 'Should include individual check name');
 });
 
-test('Should show check pass/fail with emoji', () => {
+test('Should show check pass/fail markers', () => {
   const result = window.GitHubToMarkdown.parsePullRequest(inputHTML);
   assertIncludes(result.markdown, '✅', 'Should include success emoji');
 });
@@ -307,6 +307,23 @@ test('Should produce shorter output without timestamps', () => {
   if (withoutTimestamps.markdown.length >= withTimestamps.markdown.length) {
     throw new Error('Markdown without timestamps should be shorter');
   }
+});
+
+test('Should exclude bot comments when includeBotComments=false', () => {
+  const result = window.GitHubToMarkdown.parsePullRequest(inputHTML, { includeBotComments: false });
+  assertNotIncludes(result.markdown, '**github-actions** bot commented', 'Should remove bot-authored comments');
+});
+
+test('Should hide timeline events when eventVerbosity=none', () => {
+  const result = window.GitHubToMarkdown.parsePullRequest(inputHTML, { eventVerbosity: 'none' });
+  assertNotIncludes(result.markdown, 'added 1 commit', 'Should remove commit timeline events');
+  assertNotIncludes(result.markdown, '## Merge info', 'Should remove merge info in comments-only mode');
+});
+
+test('Should keep merge summary but skip commit events when eventVerbosity=important', () => {
+  const result = window.GitHubToMarkdown.parsePullRequest(inputHTML, { eventVerbosity: 'important' });
+  assertIncludes(result.markdown, '## Merge info', 'Should keep merge info summary');
+  assertNotIncludes(result.markdown, 'added 1 commit', 'Should skip commit timeline entries');
 });
 
 // ============================================

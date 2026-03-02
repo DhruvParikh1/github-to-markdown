@@ -253,6 +253,41 @@ test('Should exclude timestamps when disabled', () => {
   }
 });
 
+test('Should hide timeline events when eventVerbosity=none', () => {
+  const result = window.GitHubToMarkdown.parseIssue(inputHTML, { eventVerbosity: 'none' });
+  assertNotIncludes(result.markdown, 'added **extension**', 'Should remove label events');
+  assertNotIncludes(result.markdown, 'changed the title', 'Should remove title change events');
+});
+
+test('Should keep title changes but skip labels when eventVerbosity=important', () => {
+  const result = window.GitHubToMarkdown.parseIssue(inputHTML, { eventVerbosity: 'important' });
+  assertIncludes(result.markdown, 'changed the title', 'Should keep title-change events');
+  assertNotIncludes(result.markdown, 'added **extension**', 'Should skip label events');
+});
+
+test('Should exclude bot-authored comments when includeBotComments=false', () => {
+  const syntheticHtml = `
+    <div data-testid="issue-viewer-comments-container">
+      <div data-wrapper-timeline-id="1">
+        <div class="react-issue-comment"></div>
+        <a data-testid="avatar-link" href="/apps/github-actions">github-actions</a>
+        <relative-time datetime="2026-01-01T00:00:00Z"></relative-time>
+        <div data-testid="markdown-body"><p>Automated bot update</p></div>
+      </div>
+      <div data-wrapper-timeline-id="2">
+        <div class="react-issue-comment"></div>
+        <a data-testid="avatar-link" href="/human-user">human-user</a>
+        <relative-time datetime="2026-01-02T00:00:00Z"></relative-time>
+        <div data-testid="markdown-body"><p>Human update</p></div>
+      </div>
+    </div>
+  `;
+
+  const result = window.GitHubToMarkdown.parseIssue(syntheticHtml, { includeBotComments: false });
+  assertIncludes(result.markdown, '**human-user**', 'Should keep human comment');
+  assertNotIncludes(result.markdown, '**github-actions**', 'Should remove bot-authored comment');
+});
+
 // ============================================
 // Test Suite: Content Comparison
 // ============================================

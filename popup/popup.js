@@ -10,15 +10,20 @@ let markdownTextarea, charCountEl, commentCountEl;
 let pageInfoCard, pageTypeBadge;
 let refreshBtn, copyBtn, copyBtnText;
 let copyFrontmatterBtn, copyFrontmatterBtnText, downloadBtn;
+let sendToBtn, sendToMenu, customTargetsMenuItems, addOwnBtn;
 let includeTitleCheckbox, includeTimestampsCheckbox, includeNestedCheckbox;
+let includeBotCommentsCheckbox, eventVerbositySelect;
 let showPageButtonCheckbox, exportPresetSelect, defaultCopyFrontmatterCheckbox;
+let enableKeyboardShortcutCheckbox, enableContextMenuCheckbox;
 let enterpriseHostsInput;
+let customTargetsList, customTargetNameInput, customTargetUrlInput, addCustomTargetBtn;
 let toastContainer;
 
 // Views
 let mainView, settingsView, aboutView;
 let navMain, navSettings, navAbout;
 let settingsButton, infoButton;
+let navigateTo; // Set in setupNavigation, used for cross-feature navigation
 
 // State
 let currentMarkdown = '';
@@ -32,10 +37,15 @@ const DEFAULT_SETTINGS = {
   includeTitle: true,
   includeTimestamps: true,
   includeNested: true,
+  includeBotComments: true,
+  eventVerbosity: 'full',
   showPageButton: true,
   exportPreset: 'standard',
   defaultCopyFrontmatter: false,
-  enterpriseHosts: []
+  enterpriseHosts: [],
+  enableKeyboardShortcut: true,
+  enableContextMenu: true,
+  customTargets: []
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
@@ -56,12 +66,25 @@ async function init() {
   copyFrontmatterBtnText = document.getElementById('copy-frontmatter-btn-text');
   downloadBtn = document.getElementById('download-btn');
 
+  sendToBtn = document.getElementById('send-to-btn');
+  sendToMenu = document.getElementById('send-to-menu');
+  customTargetsMenuItems = document.getElementById('custom-targets-menu-items');
+  addOwnBtn = document.getElementById('add-own-btn');
+  customTargetsList = document.getElementById('custom-targets-list');
+  customTargetNameInput = document.getElementById('custom-target-name');
+  customTargetUrlInput = document.getElementById('custom-target-url');
+  addCustomTargetBtn = document.getElementById('add-custom-target-btn');
+
   includeTitleCheckbox = document.getElementById('include-title');
   includeTimestampsCheckbox = document.getElementById('include-timestamps');
   includeNestedCheckbox = document.getElementById('include-nested');
+  includeBotCommentsCheckbox = document.getElementById('include-bot-comments');
+  eventVerbositySelect = document.getElementById('event-verbosity');
   showPageButtonCheckbox = document.getElementById('show-page-button');
   exportPresetSelect = document.getElementById('export-preset');
   defaultCopyFrontmatterCheckbox = document.getElementById('default-copy-frontmatter');
+  enableKeyboardShortcutCheckbox = document.getElementById('enable-keyboard-shortcut');
+  enableContextMenuCheckbox = document.getElementById('enable-context-menu');
   enterpriseHostsInput = document.getElementById('enterprise-hosts');
 
   toastContainer = document.getElementById('toast-container');
@@ -80,6 +103,9 @@ async function init() {
 
   // Load saved settings
   await loadSettings();
+
+  // Set up info-button tooltips
+  setupTooltips();
 
   // Attach navigation event listeners
   setupNavigation();
@@ -103,6 +129,14 @@ async function init() {
     await saveSettings();
     fetchMarkdown();
   });
+  includeBotCommentsCheckbox.addEventListener('change', async () => {
+    await saveSettings();
+    fetchMarkdown();
+  });
+  eventVerbositySelect.addEventListener('change', async () => {
+    await saveSettings();
+    fetchMarkdown();
+  });
   showPageButtonCheckbox.addEventListener('change', async () => {
     await saveSettings();
     await notifyContentScriptOfSettings();
@@ -115,7 +149,43 @@ async function init() {
     await saveSettings();
     updateMarkdownDisplay();
   });
+  enableKeyboardShortcutCheckbox.addEventListener('change', saveSettings);
+  enableContextMenuCheckbox.addEventListener('change', saveSettings);
   enterpriseHostsInput.addEventListener('change', handleEnterpriseHostsChange);
+
+  // Send To button — toggle dropdown
+  sendToBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sendToMenu.classList.toggle('hidden');
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', () => {
+    sendToMenu.classList.add('hidden');
+  });
+
+  // Prevent clicks inside the menu from closing it
+  sendToMenu.addEventListener('click', (e) => e.stopPropagation());
+
+  // Built-in targets
+  sendToMenu.querySelectorAll('.send-to-option[data-target]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      handleSendTo(btn.dataset.target);
+      sendToMenu.classList.add('hidden');
+    });
+  });
+
+  // "Add Your Own..." → navigate to settings
+  addOwnBtn.addEventListener('click', () => {
+    sendToMenu.classList.add('hidden');
+    if (navigateTo) navigateTo(navSettings, settingsView);
+  });
+
+  // Custom target management
+  addCustomTargetBtn.addEventListener('click', handleAddCustomTarget);
+  customTargetUrlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') handleAddCustomTarget();
+  });
 
   // Listen for Escape key to close popup
   document.addEventListener('keydown', (e) => {
@@ -344,6 +414,7 @@ function setExportActionsEnabled(enabled) {
   copyBtn.disabled = !enabled;
   copyFrontmatterBtn.disabled = !enabled;
   downloadBtn.disabled = !enabled;
+  if (sendToBtn) sendToBtn.disabled = !enabled;
 }
 
 /**
@@ -369,6 +440,9 @@ function setupNavigation() {
     views.forEach(view => view.classList.add('hidden'));
     activeView.classList.remove('hidden');
   }
+
+  // Expose setActiveSegment for external use (e.g. "Add Your Own..." button)
+  navigateTo = setActiveSegment;
 
   // Click handlers
   navMain.addEventListener('click', () => setActiveSegment(navMain, mainView));
@@ -418,9 +492,13 @@ function collectUiSettings(baseSettings = currentSettings) {
     includeTitle: includeTitleCheckbox.checked,
     includeTimestamps: includeTimestampsCheckbox.checked,
     includeNested: includeNestedCheckbox.checked,
+    includeBotComments: includeBotCommentsCheckbox.checked,
+    eventVerbosity: eventVerbositySelect.value || 'full',
     showPageButton: showPageButtonCheckbox.checked,
     exportPreset: exportPresetSelect.value || 'standard',
-    defaultCopyFrontmatter: defaultCopyFrontmatterCheckbox.checked
+    defaultCopyFrontmatter: defaultCopyFrontmatterCheckbox.checked,
+    enableKeyboardShortcut: enableKeyboardShortcutCheckbox.checked,
+    enableContextMenu: enableContextMenuCheckbox.checked
   };
 }
 
@@ -439,10 +517,17 @@ async function loadSettings() {
     includeTitleCheckbox.checked = currentSettings.includeTitle;
     includeTimestampsCheckbox.checked = currentSettings.includeTimestamps;
     includeNestedCheckbox.checked = currentSettings.includeNested;
+    includeBotCommentsCheckbox.checked = currentSettings.includeBotComments;
+    eventVerbositySelect.value = currentSettings.eventVerbosity || 'full';
     showPageButtonCheckbox.checked = currentSettings.showPageButton;
     exportPresetSelect.value = currentSettings.exportPreset;
     defaultCopyFrontmatterCheckbox.checked = currentSettings.defaultCopyFrontmatter;
+    enableKeyboardShortcutCheckbox.checked = currentSettings.enableKeyboardShortcut !== false;
+    enableContextMenuCheckbox.checked = currentSettings.enableContextMenu !== false;
     enterpriseHostsInput.value = currentSettings.enterpriseHosts.join(', ');
+
+    renderCustomTargetsList();
+    renderCustomTargetsMenu();
   } catch (error) {
     console.error('Failed to load settings:', error);
   }
@@ -563,7 +648,9 @@ async function fetchMarkdown() {
     const response = await chrome.tabs.sendMessage(tab.id, {
       action: 'getMarkdown',
       includeTimestamps: currentSettings.includeTimestamps,
-      includeNested: currentSettings.includeNested
+      includeNested: currentSettings.includeNested,
+      includeBotComments: currentSettings.includeBotComments,
+      eventVerbosity: currentSettings.eventVerbosity
     });
 
     if (!response) {
@@ -760,6 +847,135 @@ function downloadMarkdown() {
 }
 
 /**
+ * Send markdown content to an AI assistant URL
+ */
+function handleSendTo(target) {
+  const content = buildExportMarkdown(false);
+  if (!content) {
+    showToast('Nothing to send', 'error');
+    return;
+  }
+  const encoded = encodeURIComponent(content);
+  let url;
+  if (target === 'claude') {
+    url = `https://claude.ai/new?q=${encoded}`;
+  } else if (target === 'chatgpt') {
+    url = `https://chatgpt.com/?q=${encoded}`;
+  }
+  if (url) chrome.tabs.create({ url });
+}
+
+function handleCustomSendTo(urlTemplate) {
+  const content = buildExportMarkdown(false);
+  if (!content) {
+    showToast('Nothing to send', 'error');
+    return;
+  }
+  const url = urlTemplate.replace('{prompt}', encodeURIComponent(content));
+  chrome.tabs.create({ url });
+}
+
+/**
+ * Render custom targets inside the Send To dropdown menu
+ */
+function renderCustomTargetsMenu() {
+  if (!customTargetsMenuItems) return;
+  customTargetsMenuItems.innerHTML = '';
+  const targets = currentSettings.customTargets || [];
+  targets.forEach(target => {
+    const btn = document.createElement('button');
+    btn.className = 'send-to-option';
+    btn.textContent = target.name;
+    btn.addEventListener('click', () => {
+      handleCustomSendTo(target.url);
+      sendToMenu.classList.add('hidden');
+    });
+    customTargetsMenuItems.appendChild(btn);
+  });
+}
+
+/**
+ * Render the custom targets list in the settings view
+ */
+function renderCustomTargetsList() {
+  if (!customTargetsList) return;
+  customTargetsList.innerHTML = '';
+  const targets = currentSettings.customTargets || [];
+  if (targets.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'custom-targets-empty';
+    empty.textContent = 'No custom targets yet.';
+    customTargetsList.appendChild(empty);
+    return;
+  }
+  targets.forEach((target, index) => {
+    const item = document.createElement('div');
+    item.className = 'custom-target-item';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'custom-target-name';
+    nameEl.textContent = target.name;
+
+    const urlEl = document.createElement('span');
+    urlEl.className = 'custom-target-url';
+    urlEl.textContent = target.url;
+    urlEl.title = target.url;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'custom-target-remove';
+    removeBtn.title = 'Remove';
+    removeBtn.setAttribute('aria-label', `Remove ${target.name}`);
+    removeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    removeBtn.addEventListener('click', () => removeCustomTarget(index));
+
+    item.appendChild(nameEl);
+    item.appendChild(urlEl);
+    item.appendChild(removeBtn);
+    customTargetsList.appendChild(item);
+  });
+}
+
+async function handleAddCustomTarget() {
+  const name = (customTargetNameInput.value || '').trim();
+  const url = (customTargetUrlInput.value || '').trim();
+
+  if (!name) {
+    showToast('Please enter a name', 'error');
+    customTargetNameInput.focus();
+    return;
+  }
+  if (!url) {
+    showToast('Please enter a URL', 'error');
+    customTargetUrlInput.focus();
+    return;
+  }
+  if (!url.includes('{prompt}')) {
+    showToast('URL must contain {prompt}', 'error');
+    customTargetUrlInput.focus();
+    return;
+  }
+
+  const targets = [...(currentSettings.customTargets || []), { name, url }];
+  await saveSettings({ customTargets: targets });
+
+  customTargetNameInput.value = '';
+  customTargetUrlInput.value = '';
+
+  renderCustomTargetsList();
+  renderCustomTargetsMenu();
+  showToast(`Added "${name}"`, 'success');
+}
+
+async function removeCustomTarget(index) {
+  const targets = [...(currentSettings.customTargets || [])];
+  const [removed] = targets.splice(index, 1);
+  await saveSettings({ customTargets: targets });
+  renderCustomTargetsList();
+  renderCustomTargetsMenu();
+  if (removed) showToast(`Removed "${removed.name}"`, 'success');
+}
+
+/**
  * Show a toast notification
  */
 function showToast(message, type = 'info') {
@@ -768,7 +984,24 @@ function showToast(message, type = 'info') {
 
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-times-circle'}"></i> ${message}`;
+
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.setAttribute('aria-hidden', 'true');
+
+  if (type === 'success') {
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>';
+  } else if (type === 'error') {
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+  } else {
+    icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+  }
+
+  const text = document.createElement('span');
+  text.textContent = message;
+
+  toast.appendChild(icon);
+  toast.appendChild(text);
 
   toastContainer.appendChild(toast);
 
@@ -779,4 +1012,41 @@ function showToast(message, type = 'info') {
     toast.style.transition = 'all 0.3s ease-out';
     setTimeout(() => toast.remove(), 300);
   }, 2500);
+}
+
+function setupTooltips() {
+  const GAP = 6;
+  const MARGIN = 8;
+
+  document.querySelectorAll('.info-btn').forEach(btn => {
+    const tooltip = btn.nextElementSibling;
+    if (!tooltip || !tooltip.classList.contains('setting-tooltip')) return;
+
+    function show() {
+      const btnRect = btn.getBoundingClientRect();
+      const tipWidth = tooltip.offsetWidth || 270;
+      const tipHeight = tooltip.offsetHeight || 80;
+
+      // Center horizontally over button, clamped to viewport
+      let left = btnRect.left + btnRect.width / 2 - tipWidth / 2;
+      left = Math.max(MARGIN, Math.min(left, window.innerWidth - tipWidth - MARGIN));
+
+      // Prefer above; fall back to below if not enough room
+      let top = btnRect.top - GAP - tipHeight;
+      if (top < MARGIN) top = btnRect.bottom + GAP;
+
+      tooltip.style.left = `${left}px`;
+      tooltip.style.top = `${top}px`;
+      tooltip.classList.add('visible');
+    }
+
+    function hide() {
+      tooltip.classList.remove('visible');
+    }
+
+    btn.addEventListener('mouseenter', show);
+    btn.addEventListener('focus', show);
+    btn.addEventListener('mouseleave', hide);
+    btn.addEventListener('blur', hide);
+  });
 }

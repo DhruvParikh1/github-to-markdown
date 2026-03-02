@@ -8,7 +8,7 @@
     "scripting",
     "clipboardWrite",
     "storage",
-    "permissions"
+    "contextMenus"
   ],
   "host_permissions": [
     "https://github.com/*"
@@ -23,6 +23,15 @@
       "128": "icons/icon-128.png"
     },
     "default_title": "GitHub to Markdown"
+  },
+  "commands": {
+    "quick-copy-markdown": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+M",
+        "mac": "Command+Shift+M"
+      },
+      "description": "Quick copy current page as Markdown"
+    }
   },
   "background": {
     "service_worker": "background.js"
@@ -48,7 +57,7 @@
         "icons/*"
       ],
       "matches": [
-        "https://github.com/*"
+        "https://*/*"
       ]
     }
   ],

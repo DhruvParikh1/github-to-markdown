@@ -255,6 +255,14 @@ body {
     color: var(--text-primary);
 }
 
+.icon-svg {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
 /* ==========================================
    SEGMENTED NAVIGATION
    ========================================== */
@@ -429,10 +437,6 @@ body {
     color: var(--text-secondary);
 }
 
-.editor-label i {
-    color: var(--text-tertiary);
-}
-
 .char-count {
     font-size: var(--text-xs);
     color: var(--text-tertiary);
@@ -463,15 +467,14 @@ body {
    BUTTONS
    ========================================== */
 .action-buttons {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: var(--space-2);
     flex-shrink: 0;
 }
 
 .action-row {
-    display: flex;
-    gap: var(--space-2);
+    display: contents;
 }
 
 .btn {
@@ -510,7 +513,8 @@ body {
 }
 
 .btn-icon {
-    font-size: 12px;
+    width: 12px;
+    height: 12px;
 }
 
 .btn-primary {
@@ -578,6 +582,67 @@ body {
 .setting-title {
     font-size: var(--text-sm);
     font-weight: var(--weight-medium);
+    color: var(--text-primary);
+}
+
+.setting-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.tooltip-wrap {
+    display: inline-flex;
+    align-items: center;
+}
+
+.info-btn {
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border-medium);
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: var(--weight-bold);
+    line-height: 1;
+    cursor: help;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.info-btn:hover {
+    color: var(--text-primary);
+    border-color: var(--border-dark);
+}
+
+.setting-tooltip {
+    position: fixed;
+    width: min(270px, calc(100vw - 24px));
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-2);
+    font-size: var(--text-xs);
+    line-height: 1.45;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition);
+}
+
+.setting-tooltip.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.setting-tooltip strong {
     color: var(--text-primary);
 }
 
@@ -829,7 +894,7 @@ body {
     color: var(--text-tertiary);
 }
 
-.footer-text i {
+.footer-text .icon-svg {
     color: var(--success);
 }
 
@@ -876,4 +941,195 @@ body {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+.toast-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+/* ==========================================
+   EDITOR HEADER RIGHT ACTIONS
+   ========================================== */
+.editor-header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.editor-refresh-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all var(--transition);
+    flex-shrink: 0;
+}
+
+.editor-refresh-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.editor-refresh-btn .icon-svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* ==========================================
+   SEND TO DROPDOWN
+   ========================================== */
+.send-to-wrap {
+    position: relative;
+    min-width: 0;
+}
+
+.send-to-wrap .btn {
+    width: 100%;
+}
+
+.chevron-icon {
+    width: 12px;
+    height: 12px;
+    margin-left: 2px;
+    flex-shrink: 0;
+}
+
+.send-to-menu {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 0;
+    min-width: 160px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    overflow: hidden;
+    padding: 3px;
+}
+
+.send-to-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    padding: var(--space-2) var(--space-3);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--transition);
+}
+
+.send-to-option:hover {
+    background: var(--bg-hover);
+}
+
+.send-to-add-own {
+    color: var(--text-secondary);
+    font-size: var(--text-xs);
+}
+
+.send-to-add-own:hover {
+    color: var(--text-primary);
+}
+
+.send-to-divider {
+    height: 1px;
+    background: var(--border-light);
+    margin: 2px var(--space-2);
+}
+
+/* ==========================================
+   CUSTOM TARGETS (SETTINGS)
+   ========================================== */
+.custom-targets-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.custom-targets-empty {
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    padding: var(--space-1) 0;
+}
+
+.custom-target-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-md);
+    font-size: var(--text-xs);
+}
+
+.custom-target-name {
+    font-weight: var(--weight-semibold);
+    color: var(--text-primary);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.custom-target-url {
+    flex: 1;
+    color: var(--text-tertiary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.custom-target-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    flex-shrink: 0;
+}
+
+.custom-target-remove:hover {
+    background: var(--error-light);
+    color: var(--error);
+}
+
+.custom-target-add {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
+
+.inline-code {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: var(--bg-tertiary);
+    padding: 1px 4px;
+    border-radius: 3px;
+    border: 1px solid var(--border-light);
 }

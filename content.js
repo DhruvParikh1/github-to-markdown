@@ -375,6 +375,104 @@
     })}\n${body}`;
   }
 
+  function normalizeEventVerbosity(value) {
+    if (value === 'none' || value === 'important') {
+      return value;
+    }
+    return 'full';
+  }
+
+  function buildParserOptions(settings = {}) {
+    return {
+      includeTimestamps: settings.includeTimestamps !== false,
+      includeNested: settings.includeNested !== false,
+      includeBotComments: settings.includeBotComments !== false,
+      eventVerbosity: normalizeEventVerbosity(settings.eventVerbosity)
+    };
+  }
+
+  function parseCurrentPage({
+    includeTimestamps = true,
+    includeNested = true,
+    includeBotComments = true,
+    eventVerbosity = 'full'
+  } = {}) {
+    const pageType = detectPageType();
+    const html = getPageHTML();
+
+    if (!html) {
+      return {
+        success: false,
+        pageType,
+        title: getPageTitle(),
+        markdown: '',
+        commentCount: 0,
+        error: `Could not find ${pageType} content on this page`
+      };
+    }
+
+    let result;
+    if (pageType === 'discussion') {
+      result = window.GitHubToMarkdown.parse(html, {
+        includeTimestamps,
+        includeNested
+      });
+    } else if (pageType === 'issue') {
+      result = window.GitHubToMarkdown.parseIssue(html, {
+        includeTimestamps,
+        includeBotComments,
+        eventVerbosity
+      });
+    } else if (pageType === 'pr') {
+      result = window.GitHubToMarkdown.parsePullRequest(html, {
+        includeTimestamps,
+        includeBotComments,
+        eventVerbosity
+      });
+    } else {
+      return {
+        success: false,
+        pageType,
+        title: getPageTitle(),
+        markdown: '',
+        commentCount: 0,
+        error: 'Unsupported page type'
+      };
+    }
+
+    return {
+      success: !result.error,
+      pageType,
+      title: getPageTitle(),
+      markdown: result.markdown,
+      commentCount: result.commentCount,
+      error: result.error || null
+    };
+  }
+
+  async function copyTextToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (clipboardError) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.top = '-1000px';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const success = document.execCommand('copy');
+        textarea.remove();
+        return success;
+      } catch (execError) {
+        console.error('Clipboard fallback failed:', execError, clipboardError);
+        return false;
+      }
+    }
+  }
+
   // Load settings from storage
   async function loadSettings() {
     try {
@@ -444,7 +542,7 @@
   function createButton() {
     const button = document.createElement('button');
     button.className = 'gh-to-md-btn btn btn-sm';
-    button.innerHTML = '📋 Copy as Markdown';
+    button.innerHTML = 'Copy as Markdown';
     button.title = 'Convert this page to markdown and copy to clipboard';
     button.style.cssText = `
       background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
@@ -483,20 +581,16 @@
     const originalText = button.innerHTML;
 
     try {
-      button.innerHTML = '⏳ Converting...';
+      button.innerHTML = 'Converting...';
       button.disabled = true;
-
-      const pageType = detectPageType();
-      const html = getPageHTML();
-      if (!html) {
-        throw new Error(`Could not find ${pageType} content`);
-      }
 
       // Get settings for button click (use defaults, respecting stored settings)
       let settings = {
         includeTitle: true,
         includeTimestamps: true,
         includeNested: true,
+        includeBotComments: true,
+        eventVerbosity: 'full',
         exportPreset: 'standard',
         defaultCopyFrontmatter: false
       };
@@ -509,47 +603,32 @@
         // Use defaults
       }
 
-      // Parse the HTML to markdown using appropriate parser
-      let result;
-      if (pageType === 'discussion') {
-        result = window.GitHubToMarkdown.parse(html, {
-          includeTimestamps: settings.includeTimestamps,
-          includeNested: settings.includeNested
-        });
-      } else if (pageType === 'issue') {
-        result = window.GitHubToMarkdown.parseIssue(html, {
-          includeTimestamps: settings.includeTimestamps
-        });
-      } else if (pageType === 'pr') {
-        result = window.GitHubToMarkdown.parsePullRequest(html, {
-          includeTimestamps: settings.includeTimestamps
-        });
-      } else {
-        throw new Error('Unsupported page type');
+      const parseResult = parseCurrentPage(buildParserOptions(settings));
+      if (!parseResult.success) {
+        throw new Error(parseResult.error || 'Failed to parse page');
       }
 
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      const title = getPageTitle();
+      const title = parseResult.title;
       const finalMarkdown = buildExportMarkdown({
-        rawMarkdown: result.markdown,
+        rawMarkdown: parseResult.markdown,
         title,
-        pageType,
-        commentCount: result.commentCount,
+        pageType: parseResult.pageType,
+        commentCount: parseResult.commentCount,
         sourceUrl: window.location.href,
         settings
       });
 
       // Copy to clipboard
-      await navigator.clipboard.writeText(finalMarkdown);
+      const copied = await copyTextToClipboard(finalMarkdown);
+      if (!copied) {
+        throw new Error('Failed to copy markdown to clipboard');
+      }
 
       // Show success
-      button.innerHTML = '✓ Copied!';
+      button.innerHTML = 'Copied';
       button.style.background = 'linear-gradient(135deg, #10B981 0%, #059669 100%)';
 
-      showToast(`Copied ${result.commentCount} comments to clipboard!`, 'success');
+      showToast(`Copied ${parseResult.commentCount} comments to clipboard`, 'success');
 
       // Reset after delay
       setTimeout(() => {
@@ -560,7 +639,7 @@
 
     } catch (error) {
       console.error('GitHub to Markdown error:', error);
-      button.innerHTML = '❌ Error';
+      button.innerHTML = 'Error';
       button.style.background = 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)';
 
       showToast(error.message || 'Failed to convert', 'error');
@@ -643,51 +722,83 @@
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // New unified action for both discussions and issues
     if (request.action === 'getMarkdown') {
-      const pageType = detectPageType();
-      const html = getPageHTML();
-
-      if (!html) {
-        sendResponse({
-          success: false,
-          error: `Could not find ${pageType} content on this page`,
-          pageType: pageType
-        });
-        return true;
-      }
-
-      // Route to appropriate parser
-      let result;
-      if (pageType === 'discussion') {
-        result = window.GitHubToMarkdown.parse(html, {
-          includeTimestamps: request.includeTimestamps !== false,
-          includeNested: request.includeNested !== false
-        });
-      } else if (pageType === 'issue') {
-        result = window.GitHubToMarkdown.parseIssue(html, {
-          includeTimestamps: request.includeTimestamps !== false
-        });
-      } else if (pageType === 'pr') {
-        result = window.GitHubToMarkdown.parsePullRequest(html, {
-          includeTimestamps: request.includeTimestamps !== false
-        });
-      } else {
-        sendResponse({
-          success: false,
-          error: 'Unsupported page type',
-          pageType: pageType
-        });
-        return true;
-      }
-
+      const parseResult = parseCurrentPage({
+        includeTimestamps: request.includeTimestamps !== false,
+        includeNested: request.includeNested !== false,
+        includeBotComments: request.includeBotComments !== false,
+        eventVerbosity: normalizeEventVerbosity(request.eventVerbosity)
+      });
       sendResponse({
-        success: !result.error,
-        markdown: result.markdown,
-        title: getPageTitle(),
-        commentCount: result.commentCount,
-        error: result.error,
-        pageType: pageType,
+        success: parseResult.success,
+        markdown: parseResult.markdown,
+        title: parseResult.title,
+        commentCount: parseResult.commentCount,
+        error: parseResult.error,
+        pageType: parseResult.pageType,
         sourceUrl: window.location.href
       });
+
+      return true;
+    }
+
+    if (request.action === 'copyMarkdownQuick') {
+      (async () => {
+        try {
+          const settings = {
+            includeTitle: request.includeTitle !== false,
+            includeTimestamps: request.includeTimestamps !== false,
+            includeNested: request.includeNested !== false,
+            includeBotComments: request.includeBotComments !== false,
+            eventVerbosity: normalizeEventVerbosity(request.eventVerbosity),
+            exportPreset: request.exportPreset || 'standard',
+            defaultCopyFrontmatter: request.defaultCopyFrontmatter === true
+          };
+
+          const parseResult = parseCurrentPage(buildParserOptions(settings));
+          if (!parseResult.success) {
+            showToast(parseResult.error || 'Failed to convert page', 'error');
+            sendResponse({
+              success: false,
+              error: parseResult.error || 'Failed to convert page',
+              pageType: parseResult.pageType
+            });
+            return;
+          }
+
+          const finalMarkdown = buildExportMarkdown({
+            rawMarkdown: parseResult.markdown,
+            title: parseResult.title,
+            pageType: parseResult.pageType,
+            commentCount: parseResult.commentCount,
+            sourceUrl: window.location.href,
+            settings
+          });
+
+          const copied = await copyTextToClipboard(finalMarkdown);
+          if (!copied) {
+            showToast('Failed to copy markdown', 'error');
+            sendResponse({
+              success: false,
+              error: 'Failed to copy markdown to clipboard',
+              pageType: parseResult.pageType
+            });
+            return;
+          }
+
+          showToast(`Copied ${parseResult.commentCount} comments`, 'success');
+          sendResponse({
+            success: true,
+            commentCount: parseResult.commentCount,
+            pageType: parseResult.pageType
+          });
+        } catch (error) {
+          console.error('[GitHub to Markdown] quick copy failed:', error);
+          sendResponse({
+            success: false,
+            error: error.message || 'Quick copy failed'
+          });
+        }
+      })();
 
       return true;
     }
