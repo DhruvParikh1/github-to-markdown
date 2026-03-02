@@ -80,14 +80,26 @@
 
       <!-- Action Buttons -->
       <div class="action-buttons">
-        <button id="refresh-btn" class="btn" title="Refresh conversion">
-          <i class="fas fa-sync-alt btn-icon"></i>
-          <span>Refresh</span>
-        </button>
-        <button id="copy-btn" class="btn btn-primary" disabled title="Copy to clipboard">
-          <i class="fas fa-copy btn-icon"></i>
-          <span id="copy-btn-text">Copy to Clipboard</span>
-        </button>
+        <div class="action-row">
+          <button id="refresh-btn" class="btn" title="Refresh conversion">
+            <i class="fas fa-sync-alt btn-icon"></i>
+            <span>Refresh</span>
+          </button>
+          <button id="copy-btn" class="btn btn-primary" disabled title="Copy to clipboard">
+            <i class="fas fa-copy btn-icon"></i>
+            <span id="copy-btn-text">Copy</span>
+          </button>
+        </div>
+        <div class="action-row">
+          <button id="copy-frontmatter-btn" class="btn" disabled title="Copy markdown with frontmatter">
+            <i class="fas fa-file-signature btn-icon"></i>
+            <span id="copy-frontmatter-btn-text">Copy + Frontmatter</span>
+          </button>
+          <button id="download-btn" class="btn" disabled title="Download as markdown file">
+            <i class="fas fa-download btn-icon"></i>
+            <span>Download .md</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -130,6 +142,31 @@
               <span class="toggle-slider"></span>
             </label>
           </label>
+
+          <label class="setting-item setting-item-column">
+            <div class="setting-info">
+              <span class="setting-title">Export Preset</span>
+              <span class="setting-desc">Choose output template style</span>
+            </div>
+            <select id="export-preset" class="select-input">
+              <option value="standard">Standard</option>
+              <option value="llm_context">LLM Context</option>
+              <option value="changelog">Changelog</option>
+              <option value="incident_report">Incident Report</option>
+              <option value="meeting_notes">Meeting Notes</option>
+            </select>
+          </label>
+
+          <label class="setting-item">
+            <div class="setting-info">
+              <span class="setting-title">Default Copy Frontmatter</span>
+              <span class="setting-desc">Include YAML frontmatter on normal copy</span>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="default-copy-frontmatter">
+              <span class="toggle-slider"></span>
+            </label>
+          </label>
         </div>
 
         <!-- Page Integration -->
@@ -145,6 +182,19 @@
               <input type="checkbox" id="show-page-button" checked>
               <span class="toggle-slider"></span>
             </label>
+          </label>
+        </div>
+
+        <div class="settings-group">
+          <div class="settings-group-title">Enterprise Support</div>
+
+          <label class="setting-item setting-item-column">
+            <div class="setting-info">
+              <span class="setting-title">Enterprise Hosts</span>
+              <span class="setting-desc">Comma-separated domains (supports *.example.com)</span>
+            </div>
+            <input type="text" id="enterprise-hosts" class="text-input"
+              placeholder="github.mycompany.com, *.ghe.example.com">
           </label>
         </div>
       </div>
@@ -163,7 +213,7 @@
           </svg>
           <div class="about-title-group">
             <h2 class="about-title">GitHub to Markdown</h2>
-            <span id="version-badge" class="version-badge">v1.1.0</span>
+            <span id="version-badge" class="version-badge">v1.2.0</span>
           </div>
         </div>
 

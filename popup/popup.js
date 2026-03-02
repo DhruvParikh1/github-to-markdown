@@ -7,10 +7,12 @@ document.addEventListener('DOMContentLoaded', init);
 
 // DOM Elements
 let markdownTextarea, charCountEl, commentCountEl;
-let pageInfoCard, pageTypeBadge, pageTypeText;
+let pageInfoCard, pageTypeBadge;
 let refreshBtn, copyBtn, copyBtnText;
+let copyFrontmatterBtn, copyFrontmatterBtnText, downloadBtn;
 let includeTitleCheckbox, includeTimestampsCheckbox, includeNestedCheckbox;
-let showPageButtonCheckbox;
+let showPageButtonCheckbox, exportPresetSelect, defaultCopyFrontmatterCheckbox;
+let enterpriseHostsInput;
 let toastContainer;
 
 // Views
@@ -21,14 +23,22 @@ let settingsButton, infoButton;
 // State
 let currentMarkdown = '';
 let pageTitle = '';
+let currentPageType = 'unknown';
+let currentCommentCount = 0;
+let currentSourceUrl = '';
 
 // Default settings
 const DEFAULT_SETTINGS = {
   includeTitle: true,
   includeTimestamps: true,
   includeNested: true,
-  showPageButton: true
+  showPageButton: true,
+  exportPreset: 'standard',
+  defaultCopyFrontmatter: false,
+  enterpriseHosts: []
 };
+
+let currentSettings = { ...DEFAULT_SETTINGS };
 
 async function init() {
   // Get DOM elements
@@ -38,16 +48,21 @@ async function init() {
 
   pageInfoCard = document.getElementById('page-info');
   pageTypeBadge = document.getElementById('page-type-badge');
-  pageTypeText = document.getElementById('page-type-text');
 
   refreshBtn = document.getElementById('refresh-btn');
   copyBtn = document.getElementById('copy-btn');
   copyBtnText = document.getElementById('copy-btn-text');
+  copyFrontmatterBtn = document.getElementById('copy-frontmatter-btn');
+  copyFrontmatterBtnText = document.getElementById('copy-frontmatter-btn-text');
+  downloadBtn = document.getElementById('download-btn');
 
   includeTitleCheckbox = document.getElementById('include-title');
   includeTimestampsCheckbox = document.getElementById('include-timestamps');
   includeNestedCheckbox = document.getElementById('include-nested');
   showPageButtonCheckbox = document.getElementById('show-page-button');
+  exportPresetSelect = document.getElementById('export-preset');
+  defaultCopyFrontmatterCheckbox = document.getElementById('default-copy-frontmatter');
+  enterpriseHostsInput = document.getElementById('enterprise-hosts');
 
   toastContainer = document.getElementById('toast-container');
 
@@ -71,25 +86,36 @@ async function init() {
 
   // Attach button event listeners
   refreshBtn.addEventListener('click', fetchMarkdown);
-  copyBtn.addEventListener('click', copyToClipboard);
+  copyBtn.addEventListener('click', () => copyToClipboard(false));
+  copyFrontmatterBtn.addEventListener('click', () => copyToClipboard(true));
+  downloadBtn.addEventListener('click', downloadMarkdown);
 
   // Settings listeners
-  includeTitleCheckbox.addEventListener('change', () => {
-    saveSettings();
+  includeTitleCheckbox.addEventListener('change', async () => {
+    await saveSettings();
     updateMarkdownDisplay();
   });
-  includeTimestampsCheckbox.addEventListener('change', () => {
-    saveSettings();
+  includeTimestampsCheckbox.addEventListener('change', async () => {
+    await saveSettings();
     fetchMarkdown();
   });
-  includeNestedCheckbox.addEventListener('change', () => {
-    saveSettings();
+  includeNestedCheckbox.addEventListener('change', async () => {
+    await saveSettings();
     fetchMarkdown();
   });
   showPageButtonCheckbox.addEventListener('change', async () => {
-    saveSettings();
+    await saveSettings();
     await notifyContentScriptOfSettings();
   });
+  exportPresetSelect.addEventListener('change', async () => {
+    await saveSettings();
+    updateMarkdownDisplay();
+  });
+  defaultCopyFrontmatterCheckbox.addEventListener('change', async () => {
+    await saveSettings();
+    updateMarkdownDisplay();
+  });
+  enterpriseHostsInput.addEventListener('change', handleEnterpriseHostsChange);
 
   // Listen for Escape key to close popup
   document.addEventListener('keydown', (e) => {
@@ -103,6 +129,221 @@ async function init() {
 
   // Initial fetch
   fetchMarkdown();
+}
+
+function normalizeHost(hostValue) {
+  return String(hostValue || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '');
+}
+
+function isValidHostPattern(hostPattern) {
+  return /^(\*\.)?([a-z0-9-]+\.)+[a-z0-9-]+$/.test(hostPattern);
+}
+
+function parseEnterpriseHostsInput(value) {
+  const rawHosts = String(value || '')
+    .split(',')
+    .map(normalizeHost)
+    .filter(Boolean);
+
+  const uniqueHosts = [];
+  const invalidHosts = [];
+
+  rawHosts.forEach((host) => {
+    if (!isValidHostPattern(host)) {
+      invalidHosts.push(host);
+      return;
+    }
+    if (!uniqueHosts.includes(host)) {
+      uniqueHosts.push(host);
+    }
+  });
+
+  return { validHosts: uniqueHosts, invalidHosts };
+}
+
+function hostMatchesPattern(hostname, pattern) {
+  if (!pattern) return false;
+  if (pattern.startsWith('*.')) {
+    const suffix = pattern.slice(2);
+    return hostname === suffix || hostname.endsWith(`.${suffix}`);
+  }
+  return hostname === pattern;
+}
+
+function isSupportedHostUrl(urlString, settings = currentSettings) {
+  try {
+    const url = new URL(urlString);
+    const hostname = normalizeHost(url.hostname);
+    if (hostname === 'github.com') {
+      return true;
+    }
+
+    const enterpriseHosts = Array.isArray(settings.enterpriseHosts) ? settings.enterpriseHosts : [];
+    return enterpriseHosts.some(pattern => hostMatchesPattern(hostname, pattern));
+  } catch {
+    return false;
+  }
+}
+
+function getPageTypeLabel(pageType) {
+  if (pageType === 'discussion') return 'Discussion';
+  if (pageType === 'issue') return 'Issue';
+  if (pageType === 'pr') return 'Pull Request';
+  return 'Page';
+}
+
+function yamlString(value) {
+  const normalized = String(value ?? '').replace(/\r\n/g, '\n');
+  return `"${normalized.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+}
+
+function buildFrontmatter({
+  title,
+  pageType,
+  sourceUrl,
+  commentCount,
+  exportPreset
+}) {
+  const exportedAt = new Date().toISOString();
+  return [
+    '---',
+    `title: ${yamlString(title || '')}`,
+    `source_type: ${yamlString(pageType || '')}`,
+    `source_url: ${yamlString(sourceUrl || '')}`,
+    `comment_count: ${Number.isFinite(commentCount) ? commentCount : 0}`,
+    `export_preset: ${yamlString(exportPreset || 'standard')}`,
+    `exported_at: ${yamlString(exportedAt)}`,
+    '---',
+    ''
+  ].join('\n');
+}
+
+function buildMetadataLines() {
+  return [
+    `- Source type: ${getPageTypeLabel(currentPageType)}`,
+    `- Comments: ${Number.isFinite(currentCommentCount) ? currentCommentCount : 0}`,
+    `- URL: ${currentSourceUrl || ''}`,
+    `- Exported at: ${new Date().toISOString()}`
+  ].join('\n');
+}
+
+function buildPresetMarkdown() {
+  const preset = currentSettings.exportPreset || 'standard';
+  const title = pageTitle || `${getPageTypeLabel(currentPageType)} export`;
+  const body = currentMarkdown || '';
+  const metadata = buildMetadataLines();
+
+  if (preset === 'llm_context') {
+    return [
+      `# LLM Context: ${title}`,
+      '',
+      '## Metadata',
+      metadata,
+      '',
+      '## Usage Notes',
+      '- Treat this as source context for summarization and reasoning.',
+      '- Preserve technical details and links from the raw thread.',
+      '',
+      '## Raw Thread',
+      '',
+      body
+    ].join('\n');
+  }
+
+  if (preset === 'changelog') {
+    return [
+      `# Changelog Draft: ${title}`,
+      '',
+      '## Metadata',
+      metadata,
+      '',
+      '## Highlights',
+      '- Fill in key shipped changes.',
+      '',
+      '## Breaking Changes',
+      '- None noted',
+      '',
+      '## Detailed Source Notes',
+      '',
+      body
+    ].join('\n');
+  }
+
+  if (preset === 'incident_report') {
+    return [
+      `# Incident Report Notes: ${title}`,
+      '',
+      '## Metadata',
+      metadata,
+      '',
+      '## Incident Summary',
+      '- Fill in summary',
+      '',
+      '## Timeline',
+      '',
+      body,
+      '',
+      '## Impact',
+      '- Fill in impact',
+      '',
+      '## Follow-up Actions',
+      '- [ ] Add action item'
+    ].join('\n');
+  }
+
+  if (preset === 'meeting_notes') {
+    return [
+      `# Meeting Notes: ${title}`,
+      '',
+      '## Metadata',
+      metadata,
+      '',
+      '## Agenda',
+      '- Fill in agenda',
+      '',
+      '## Discussion Log',
+      '',
+      body,
+      '',
+      '## Decisions',
+      '- Fill in decisions',
+      '',
+      '## Action Items',
+      '- [ ] Add action item'
+    ].join('\n');
+  }
+
+  let markdown = body;
+  if (currentSettings.includeTitle && pageTitle) {
+    markdown = `# ${pageTitle}\n\n${markdown}`;
+  }
+  return markdown;
+}
+
+function buildExportMarkdown(forceFrontmatter = false) {
+  const body = buildPresetMarkdown();
+  const includeFrontmatter = forceFrontmatter || currentSettings.defaultCopyFrontmatter === true;
+  if (!includeFrontmatter) {
+    return body;
+  }
+
+  return `${buildFrontmatter({
+    title: pageTitle,
+    pageType: currentPageType,
+    sourceUrl: currentSourceUrl,
+    commentCount: currentCommentCount,
+    exportPreset: currentSettings.exportPreset
+  })}\n${body}`;
+}
+
+function setExportActionsEnabled(enabled) {
+  copyBtn.disabled = !enabled;
+  copyFrontmatterBtn.disabled = !enabled;
+  downloadBtn.disabled = !enabled;
 }
 
 /**
@@ -165,10 +406,22 @@ function updateVersionBadge() {
     try {
       const manifest = chrome.runtime.getManifest();
       versionBadge.textContent = `v${manifest.version}`;
-    } catch (e) {
+    } catch {
       // Fallback
     }
   }
+}
+
+function collectUiSettings(baseSettings = currentSettings) {
+  return {
+    ...baseSettings,
+    includeTitle: includeTitleCheckbox.checked,
+    includeTimestamps: includeTimestampsCheckbox.checked,
+    includeNested: includeNestedCheckbox.checked,
+    showPageButton: showPageButtonCheckbox.checked,
+    exportPreset: exportPresetSelect.value || 'standard',
+    defaultCopyFrontmatter: defaultCopyFrontmatterCheckbox.checked
+  };
 }
 
 /**
@@ -177,12 +430,19 @@ function updateVersionBadge() {
 async function loadSettings() {
   try {
     const result = await chrome.storage.local.get('settings');
-    const settings = { ...DEFAULT_SETTINGS, ...result.settings };
+    const storageSettings = { ...DEFAULT_SETTINGS, ...result.settings };
+    const enterpriseHosts = Array.isArray(storageSettings.enterpriseHosts)
+      ? storageSettings.enterpriseHosts.map(normalizeHost).filter(Boolean)
+      : [];
+    currentSettings = { ...storageSettings, enterpriseHosts };
 
-    includeTitleCheckbox.checked = settings.includeTitle;
-    includeTimestampsCheckbox.checked = settings.includeTimestamps;
-    includeNestedCheckbox.checked = settings.includeNested;
-    showPageButtonCheckbox.checked = settings.showPageButton;
+    includeTitleCheckbox.checked = currentSettings.includeTitle;
+    includeTimestampsCheckbox.checked = currentSettings.includeTimestamps;
+    includeNestedCheckbox.checked = currentSettings.includeNested;
+    showPageButtonCheckbox.checked = currentSettings.showPageButton;
+    exportPresetSelect.value = currentSettings.exportPreset;
+    defaultCopyFrontmatterCheckbox.checked = currentSettings.defaultCopyFrontmatter;
+    enterpriseHostsInput.value = currentSettings.enterpriseHosts.join(', ');
   } catch (error) {
     console.error('Failed to load settings:', error);
   }
@@ -191,18 +451,55 @@ async function loadSettings() {
 /**
  * Save settings to chrome.storage
  */
-async function saveSettings() {
+async function saveSettings(extra = {}) {
   try {
-    const settings = {
-      includeTitle: includeTitleCheckbox.checked,
-      includeTimestamps: includeTimestampsCheckbox.checked,
-      includeNested: includeNestedCheckbox.checked,
-      showPageButton: showPageButtonCheckbox.checked
+    currentSettings = {
+      ...collectUiSettings(),
+      ...extra
     };
-    await chrome.storage.local.set({ settings });
+    await chrome.storage.local.set({ settings: currentSettings });
   } catch (error) {
     console.error('Failed to save settings:', error);
   }
+}
+
+async function requestEnterpriseHostPermissions(hosts) {
+  if (!hosts.length) {
+    return true;
+  }
+
+  const origins = hosts.map((host) => `https://${host}/*`);
+  try {
+    const granted = await chrome.permissions.request({ origins });
+    return granted === true;
+  } catch (error) {
+    console.error('Failed to request host permissions:', error);
+    return false;
+  }
+}
+
+async function handleEnterpriseHostsChange() {
+  const { validHosts, invalidHosts } = parseEnterpriseHostsInput(enterpriseHostsInput.value);
+
+  if (invalidHosts.length > 0) {
+    showToast(`Invalid host: ${invalidHosts[0]}`, 'error');
+    enterpriseHostsInput.value = currentSettings.enterpriseHosts.join(', ');
+    return;
+  }
+
+  const previousHosts = Array.isArray(currentSettings.enterpriseHosts) ? currentSettings.enterpriseHosts : [];
+  const addedHosts = validHosts.filter(host => !previousHosts.includes(host));
+
+  const granted = await requestEnterpriseHostPermissions(addedHosts);
+  if (!granted) {
+    showToast('Host permissions were not granted', 'error');
+    enterpriseHostsInput.value = previousHosts.join(', ');
+    return;
+  }
+
+  enterpriseHostsInput.value = validHosts.join(', ');
+  await saveSettings({ enterpriseHosts: validHosts });
+  showToast('Enterprise hosts updated', 'success');
 }
 
 /**
@@ -211,10 +508,10 @@ async function saveSettings() {
 async function notifyContentScriptOfSettings() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab && tab.url?.includes('github.com')) {
+    if (tab && tab.url && isSupportedHostUrl(tab.url)) {
       await chrome.tabs.sendMessage(tab.id, {
         action: 'updateSettings',
-        showPageButton: showPageButtonCheckbox.checked
+        showPageButton: currentSettings.showPageButton
       });
     }
   } catch (error) {
@@ -226,9 +523,12 @@ async function notifyContentScriptOfSettings() {
  * Fetch markdown from the current tab
  */
 async function fetchMarkdown() {
-  copyBtn.disabled = true;
+  setExportActionsEnabled(false);
   currentMarkdown = '';
   pageTitle = '';
+  currentPageType = 'unknown';
+  currentCommentCount = 0;
+  currentSourceUrl = '';
   markdownTextarea.value = '';
   charCountEl.textContent = '';
   pageInfoCard.classList.add('hidden');
@@ -242,10 +542,9 @@ async function fetchMarkdown() {
       return;
     }
 
-    // Check if we're on GitHub
-    if (!tab.url || !tab.url.includes('github.com')) {
-      showToast('Navigate to a GitHub page', 'error');
-      markdownTextarea.placeholder = 'This extension works on GitHub discussions, issues, and pull requests.\n\nNavigate to a supported page and try again.';
+    if (!tab.url || !isSupportedHostUrl(tab.url)) {
+      showToast('Navigate to a configured GitHub host', 'error');
+      markdownTextarea.placeholder = 'Supported hosts: github.com and configured enterprise domains.\n\nOpen a discussion, issue, or pull request page and try again.';
       return;
     }
 
@@ -263,13 +562,13 @@ async function fetchMarkdown() {
     // Request markdown from content script
     const response = await chrome.tabs.sendMessage(tab.id, {
       action: 'getMarkdown',
-      includeTimestamps: includeTimestampsCheckbox.checked,
-      includeNested: includeNestedCheckbox.checked
+      includeTimestamps: currentSettings.includeTimestamps,
+      includeNested: currentSettings.includeNested
     });
 
     if (!response) {
       showToast('No response from page', 'error');
-      markdownTextarea.placeholder = 'Could not communicate with the page.\n\nTry refreshing the GitHub page and clicking the extension again.';
+      markdownTextarea.placeholder = 'Could not communicate with the page.\n\nTry refreshing the page and clicking the extension again.';
       return;
     }
 
@@ -279,28 +578,31 @@ async function fetchMarkdown() {
       return;
     }
 
-    // Store the title and markdown
+    // Store conversion state
     pageTitle = response.title || '';
-    currentMarkdown = response.markdown;
+    currentMarkdown = response.markdown || '';
+    currentPageType = response.pageType || 'unknown';
+    currentCommentCount = response.commentCount || 0;
+    currentSourceUrl = response.sourceUrl || tab.url;
 
     // Update page info card
-    updatePageInfo(response.pageType, response.commentCount);
+    updatePageInfo(currentPageType, currentCommentCount);
 
-    // Update display with title if enabled
+    // Update display with chosen preset
     updateMarkdownDisplay();
 
-    showToast(`Converted ${response.commentCount} comment${response.commentCount !== 1 ? 's' : ''}`, 'success');
-    copyBtn.disabled = false;
+    showToast(`Converted ${currentCommentCount} comment${currentCommentCount !== 1 ? 's' : ''}`, 'success');
+    setExportActionsEnabled(true);
 
   } catch (error) {
     console.error('Popup error:', error);
 
     if (error.message?.includes('Receiving end does not exist')) {
       showToast('Please refresh the page', 'error');
-      markdownTextarea.placeholder = 'The extension needs to be reloaded on this page.\n\nPlease refresh the GitHub page and try again.';
+      markdownTextarea.placeholder = 'The extension needs to be reloaded on this page.\n\nPlease refresh the page and try again.';
     } else {
       showToast('Connection error', 'error');
-      markdownTextarea.placeholder = `Error: ${error.message}\n\nTry refreshing the GitHub page.`;
+      markdownTextarea.placeholder = `Error: ${error.message}\n\nTry refreshing the page.`;
     }
   }
 }
@@ -319,19 +621,17 @@ function updatePageInfo(pageType, commentCount) {
   const issueIcon = `<svg class="badge-icon" width="12" height="12" viewBox="0 0 256 256"><circle cx="128" cy="128" r="96" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><line x1="128" y1="132" x2="128" y2="80" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="24"/><circle cx="128" cy="172" r="16" fill="currentColor"/></svg>`;
   const prIcon = `<svg class="badge-icon" width="12" height="12" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"><circle cx="72" cy="192" r="24" /><circle cx="72" cy="64" r="24" /><line x1="72" y1="88" x2="72" y2="168" /><circle cx="200" cy="192" r="24" /><path d="M200,168V110.63a16,16,0,0,0-4.69-11.32L144,48" /><polyline points="144 96 144 48 192 48" /></svg>`;
 
-  let icon, label;
+  let icon = issueIcon;
+  let label = getPageTypeLabel(pageType);
   if (pageType === 'discussion') {
     pageTypeBadge.classList.add('badge-discussion');
     icon = discussionIcon;
-    label = 'Discussion';
   } else if (pageType === 'issue') {
     pageTypeBadge.classList.add('badge-issue');
     icon = issueIcon;
-    label = 'Issue';
   } else if (pageType === 'pr') {
     pageTypeBadge.classList.add('badge-pr');
     icon = prIcon;
-    label = 'Pull Request';
   }
 
   pageTypeBadge.innerHTML = `${icon} <span>${label}</span>`;
@@ -350,14 +650,7 @@ function updateMarkdownDisplay() {
     return;
   }
 
-  let displayMarkdown = '';
-
-  // Prepend title if enabled and available
-  if (includeTitleCheckbox.checked && pageTitle) {
-    displayMarkdown = `# ${pageTitle}\n\n`;
-  }
-
-  displayMarkdown += currentMarkdown;
+  const displayMarkdown = buildExportMarkdown(false);
   markdownTextarea.value = displayMarkdown;
 
   // Update character count
@@ -369,64 +662,101 @@ function updateMarkdownDisplay() {
   }
 }
 
+async function copyText(text) {
+  // Try using the Clipboard API first
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (clipboardError) {
+    console.log('Clipboard API failed, trying fallback:', clipboardError.message);
+
+    // Fallback: Use execCommand
+    try {
+      markdownTextarea.value = text;
+      markdownTextarea.select();
+      markdownTextarea.setSelectionRange(0, markdownTextarea.value.length);
+      const success = document.execCommand('copy');
+      window.getSelection()?.removeAllRanges();
+      updateMarkdownDisplay();
+      return success;
+    } catch (execError) {
+      console.error('Fallback copy also failed:', execError);
+      return false;
+    }
+  }
+}
+
+function showCopySuccess(button, textEl, successText, resetText) {
+  button.classList.add('btn-success');
+  button.classList.remove('btn-primary');
+  textEl.textContent = successText;
+  setTimeout(() => {
+    button.classList.remove('btn-success');
+    if (button === copyBtn) {
+      button.classList.add('btn-primary');
+    }
+    textEl.textContent = resetText;
+  }, 2000);
+}
+
 /**
  * Copy markdown to clipboard
  */
-async function copyToClipboard() {
-  const markdownToCopy = markdownTextarea.value;
+async function copyToClipboard(forceFrontmatter) {
+  const markdownToCopy = buildExportMarkdown(forceFrontmatter);
 
   if (!markdownToCopy) {
     showToast('Nothing to copy', 'error');
     return;
   }
 
-  let copySuccess = false;
-
-  // Try using the Clipboard API first
-  try {
-    await navigator.clipboard.writeText(markdownToCopy);
-    copySuccess = true;
-  } catch (clipboardError) {
-    console.log('Clipboard API failed, trying fallback:', clipboardError.message);
-
-    // Fallback: Use execCommand (works in more contexts)
-    try {
-      // Select the textarea content
-      markdownTextarea.select();
-      markdownTextarea.setSelectionRange(0, markdownTextarea.value.length);
-
-      // Execute copy command
-      copySuccess = document.execCommand('copy');
-
-      // Deselect
-      window.getSelection()?.removeAllRanges();
-    } catch (execError) {
-      console.error('Fallback copy also failed:', execError);
-    }
-  }
+  const copySuccess = await copyText(markdownToCopy);
 
   if (copySuccess) {
-    // Visual feedback
-    copyBtn.classList.add('btn-success');
-    copyBtn.classList.remove('btn-primary');
-    copyBtnText.textContent = '✓ Copied!';
-
-    showToast('Copied to clipboard!', 'success');
-
-    // Hide status badge after successful copy (after a short delay)
-    setTimeout(() => {
-      statusEl.classList.add('hidden');
-    }, 1500);
-
-    // Reset button after delay
-    setTimeout(() => {
-      copyBtn.classList.remove('btn-success');
-      copyBtn.classList.add('btn-primary');
-      copyBtnText.textContent = 'Copy to Clipboard';
-    }, 2000);
+    if (forceFrontmatter) {
+      showCopySuccess(copyFrontmatterBtn, copyFrontmatterBtnText, 'Copied', 'Copy + Frontmatter');
+      showToast('Copied with frontmatter', 'success');
+    } else {
+      showCopySuccess(copyBtn, copyBtnText, 'Copied', 'Copy');
+      showToast('Copied to clipboard', 'success');
+    }
   } else {
     showToast('Failed to copy', 'error');
   }
+}
+
+function sanitizeFilename(text) {
+  return String(text || 'github-export')
+    .toLowerCase()
+    .replace(/[^a-z0-9-_ ]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .slice(0, 80) || 'github-export';
+}
+
+function downloadMarkdown() {
+  const markdown = buildExportMarkdown(false);
+  if (!markdown) {
+    showToast('Nothing to download', 'error');
+    return;
+  }
+
+  const presetSuffix = currentSettings.exportPreset && currentSettings.exportPreset !== 'standard'
+    ? `-${currentSettings.exportPreset}`
+    : '';
+  const filename = `${sanitizeFilename(pageTitle || `${currentPageType}-export`)}${presetSuffix}.md`;
+
+  const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+
+  showToast(`Downloaded ${filename}`, 'success');
 }
 
 /**

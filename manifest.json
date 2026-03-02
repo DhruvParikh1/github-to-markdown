@@ -7,10 +7,14 @@
     "activeTab",
     "scripting",
     "clipboardWrite",
-    "storage"
+    "storage",
+    "permissions"
   ],
   "host_permissions": [
     "https://github.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
   ],
   "action": {
     "default_icon": {

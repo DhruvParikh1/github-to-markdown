@@ -62,7 +62,7 @@ function assertMatch(text, regex, message = '') {
 }
 
 // Load reference files
-const referenceDir = path.join(__dirname, '..', 'reference-issue-example');
+const referenceDir = path.join(__dirname, '..', 'References-from-GitHub', 'reference-issue-example');
 const inputHTML = fs.readFileSync(path.join(referenceDir, 'issue-example.html'), 'utf8');
 const expectedOutput = fs.readFileSync(path.join(referenceDir, 'issue-converted.md'), 'utf8');
 

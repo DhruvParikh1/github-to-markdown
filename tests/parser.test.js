@@ -55,7 +55,7 @@ function assertNotIncludes(haystack, needle, message = '') {
 }
 
 // Load reference files
-const referenceDir = path.join(__dirname, '..', '..', 'reference-successful-example');
+const referenceDir = path.join(__dirname, '..', 'References-from-GitHub', 'reference-discussion-example');
 const inputHTML = fs.readFileSync(path.join(referenceDir, 'discussion_element.html'), 'utf8');
 const expectedOutput = fs.readFileSync(path.join(referenceDir, 'discussion-converted.md'), 'utf8');
 

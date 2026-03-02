@@ -6,6 +6,11 @@
 (function () {
   'use strict';
 
+  if (window.__GH_TO_MD_CONTENT_SCRIPT_LOADED__) {
+    return;
+  }
+  window.__GH_TO_MD_CONTENT_SCRIPT_LOADED__ = true;
+
   // Settings state
   let showPageButton = true;
 
@@ -189,6 +194,187 @@
     return '';
   }
 
+  function getPageTypeLabel(pageType) {
+    if (pageType === 'discussion') return 'Discussion';
+    if (pageType === 'issue') return 'Issue';
+    if (pageType === 'pr') return 'Pull Request';
+    return 'Page';
+  }
+
+  function yamlString(value) {
+    const normalized = String(value ?? '').replace(/\r\n/g, '\n');
+    return `"${normalized.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+  }
+
+  function buildFrontmatter({
+    title,
+    pageType,
+    sourceUrl,
+    commentCount,
+    exportPreset
+  }) {
+    const exportedAt = new Date().toISOString();
+    return [
+      '---',
+      `title: ${yamlString(title || '')}`,
+      `source_type: ${yamlString(pageType || '')}`,
+      `source_url: ${yamlString(sourceUrl || '')}`,
+      `comment_count: ${Number.isFinite(commentCount) ? commentCount : 0}`,
+      `export_preset: ${yamlString(exportPreset || 'standard')}`,
+      `exported_at: ${yamlString(exportedAt)}`,
+      '---',
+      ''
+    ].join('\n');
+  }
+
+  function buildMetadataLines({
+    pageType,
+    commentCount,
+    sourceUrl
+  }) {
+    return [
+      `- Source type: ${getPageTypeLabel(pageType)}`,
+      `- Comments: ${Number.isFinite(commentCount) ? commentCount : 0}`,
+      `- URL: ${sourceUrl || window.location.href}`,
+      `- Exported at: ${new Date().toISOString()}`
+    ].join('\n');
+  }
+
+  function buildPresetMarkdown({
+    preset,
+    title,
+    pageType,
+    commentCount,
+    sourceUrl,
+    rawMarkdown,
+    includeTitle
+  }) {
+    const safeTitle = title || `${getPageTypeLabel(pageType)} export`;
+    const body = rawMarkdown || '';
+    const metadata = buildMetadataLines({ pageType, commentCount, sourceUrl });
+
+    if (preset === 'llm_context') {
+      return [
+        `# LLM Context: ${safeTitle}`,
+        '',
+        '## Metadata',
+        metadata,
+        '',
+        '## Usage Notes',
+        '- Treat this as source context for summarization and reasoning.',
+        '- Preserve technical details and links from the raw thread.',
+        '',
+        '## Raw Thread',
+        '',
+        body
+      ].join('\n');
+    }
+
+    if (preset === 'changelog') {
+      return [
+        `# Changelog Draft: ${safeTitle}`,
+        '',
+        '## Metadata',
+        metadata,
+        '',
+        '## Highlights',
+        '- Fill in key shipped changes.',
+        '',
+        '## Breaking Changes',
+        '- None noted',
+        '',
+        '## Detailed Source Notes',
+        '',
+        body
+      ].join('\n');
+    }
+
+    if (preset === 'incident_report') {
+      return [
+        `# Incident Report Notes: ${safeTitle}`,
+        '',
+        '## Metadata',
+        metadata,
+        '',
+        '## Incident Summary',
+        '- Fill in summary',
+        '',
+        '## Timeline',
+        '',
+        body,
+        '',
+        '## Impact',
+        '- Fill in impact',
+        '',
+        '## Follow-up Actions',
+        '- [ ] Add action item'
+      ].join('\n');
+    }
+
+    if (preset === 'meeting_notes') {
+      return [
+        `# Meeting Notes: ${safeTitle}`,
+        '',
+        '## Metadata',
+        metadata,
+        '',
+        '## Agenda',
+        '- Fill in agenda',
+        '',
+        '## Discussion Log',
+        '',
+        body,
+        '',
+        '## Decisions',
+        '- Fill in decisions',
+        '',
+        '## Action Items',
+        '- [ ] Add action item'
+      ].join('\n');
+    }
+
+    let standardBody = body;
+    if (includeTitle && title) {
+      standardBody = `# ${title}\n\n${standardBody}`;
+    }
+    return standardBody;
+  }
+
+  function buildExportMarkdown({
+    rawMarkdown,
+    title,
+    pageType,
+    commentCount,
+    sourceUrl,
+    settings,
+    forceFrontmatter = false
+  }) {
+    const exportPreset = settings.exportPreset || 'standard';
+    const includeFrontmatter = forceFrontmatter || settings.defaultCopyFrontmatter === true;
+
+    const body = buildPresetMarkdown({
+      preset: exportPreset,
+      title,
+      pageType,
+      commentCount,
+      sourceUrl,
+      rawMarkdown,
+      includeTitle: settings.includeTitle !== false
+    });
+
+    if (!includeFrontmatter) {
+      return body;
+    }
+
+    return `${buildFrontmatter({
+      title,
+      pageType,
+      sourceUrl,
+      commentCount,
+      exportPreset
+    })}\n${body}`;
+  }
+
   // Load settings from storage
   async function loadSettings() {
     try {
@@ -307,7 +493,13 @@
       }
 
       // Get settings for button click (use defaults, respecting stored settings)
-      let settings = { includeTitle: true, includeTimestamps: true, includeNested: true };
+      let settings = {
+        includeTitle: true,
+        includeTimestamps: true,
+        includeNested: true,
+        exportPreset: 'standard',
+        defaultCopyFrontmatter: false
+      };
       try {
         const result = await chrome.storage.local.get('settings');
         if (result.settings) {
@@ -340,15 +532,15 @@
         throw new Error(result.error);
       }
 
-      // Build final markdown with optional title
-      let finalMarkdown = '';
-      if (settings.includeTitle) {
-        const title = getPageTitle();
-        if (title) {
-          finalMarkdown = `# ${title}\n\n`;
-        }
-      }
-      finalMarkdown += result.markdown;
+      const title = getPageTitle();
+      const finalMarkdown = buildExportMarkdown({
+        rawMarkdown: result.markdown,
+        title,
+        pageType,
+        commentCount: result.commentCount,
+        sourceUrl: window.location.href,
+        settings
+      });
 
       // Copy to clipboard
       await navigator.clipboard.writeText(finalMarkdown);
@@ -493,7 +685,8 @@
         title: getPageTitle(),
         commentCount: result.commentCount,
         error: result.error,
-        pageType: pageType
+        pageType: pageType,
+        sourceUrl: window.location.href
       });
 
       return true;
@@ -526,7 +719,8 @@
         title: title,
         commentCount: result.commentCount,
         error: result.error,
-        isDiscussionPage: true
+        isDiscussionPage: true,
+        sourceUrl: window.location.href
       });
 
       return true;
