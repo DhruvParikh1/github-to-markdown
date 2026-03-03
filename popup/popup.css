@@ -443,6 +443,12 @@ body {
     background: var(--bg-tertiary);
     padding: 2px 8px;
     border-radius: var(--radius-full);
+    transition: background 0.15s, color 0.15s;
+}
+
+.char-count:hover {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
 }
 
 .markdown-textarea {

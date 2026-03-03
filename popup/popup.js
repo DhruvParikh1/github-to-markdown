@@ -34,6 +34,7 @@ let pageTitle = '';
 let currentPageType = 'unknown';
 let currentCommentCount = 0;
 let currentSourceUrl = '';
+let charCountUnit = 'chars'; // cycles: 'chars' → 'words' → 'tokens'
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -48,7 +49,8 @@ const DEFAULT_SETTINGS = {
   enterpriseHosts: [],
   enableKeyboardShortcut: true,
   enableContextMenu: true,
-  customTargets: []
+  customTargets: [],
+  charCountUnit: 'chars'
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
@@ -113,6 +115,16 @@ async function init() {
 
   // Set up custom select dropdowns in settings
   setupSettingSelects();
+
+  // Char count unit cycling
+  charCountEl.title = 'Click to switch units';
+  charCountEl.style.cursor = 'pointer';
+  charCountEl.addEventListener('click', async () => {
+    const cycle = { chars: 'words', words: 'tokens', tokens: 'chars' };
+    charCountUnit = cycle[charCountUnit] || 'chars';
+    await saveSettings({ charCountUnit });
+    if (currentMarkdown) updateMarkdownDisplay();
+  });
 
   // Attach button event listeners
   refreshBtn.addEventListener('click', fetchMarkdown);
@@ -572,7 +584,8 @@ function collectUiSettings(baseSettings = currentSettings) {
     exportPreset: exportPresetValue || 'standard',
     defaultCopyFrontmatter: defaultCopyFrontmatterCheckbox.checked,
     enableKeyboardShortcut: enableKeyboardShortcutCheckbox.checked,
-    enableContextMenu: enableContextMenuCheckbox.checked
+    enableContextMenu: enableContextMenuCheckbox.checked,
+    charCountUnit
   };
 }
 
@@ -599,6 +612,7 @@ async function loadSettings() {
     enableKeyboardShortcutCheckbox.checked = currentSettings.enableKeyboardShortcut !== false;
     enableContextMenuCheckbox.checked = currentSettings.enableContextMenu !== false;
     enterpriseHostsInput.value = currentSettings.enterpriseHosts.join(', ');
+    charCountUnit = currentSettings.charCountUnit || 'chars';
 
     renderCustomTargetsList();
     renderCustomTargetsMenu();
@@ -801,6 +815,84 @@ function updatePageInfo(pageType, commentCount) {
   commentCountEl.textContent = `${commentCount} found`;
 }
 
+function estimateTokens(text) {
+  if (!text) return 0;
+
+  let total = 0;
+
+  // 1. Markdown links & images: [text](url) — count URL part at URL rate
+  text = text.replace(/!?\[([^\]]*)\]\((https?:\/\/[^\s\)]+)\)/g, (_, label, url) => {
+    total += Math.ceil(url.length / 2.5); // URL tokens
+    total += 2;                           // [] () syntax tokens
+    return label;                         // label counted as prose later
+  });
+
+  // 2. Standalone URLs (~2.5 chars/token — paths & domains split into many pieces)
+  text = text.replace(/https?:\/\/[^\s\)>\]]+/g, (url) => {
+    total += Math.ceil(url.length / 2.5);
+    return '';
+  });
+
+  // 3. Fenced code blocks (~3 chars/token — symbols & short identifiers tokenize densely)
+  text = text.replace(/```[\s\S]*?```/g, (block) => {
+    total += Math.ceil(block.length / 3);
+    return '';
+  });
+
+  // 4. Inline code (~3.5 chars/token)
+  text = text.replace(/`[^`\n]+`/g, (code) => {
+    total += Math.ceil(code.length / 3.5);
+    return '';
+  });
+
+  // 5. HTML entities (&amp; &lt; &#123; etc.) — each is typically 1 token
+  text = text.replace(/&(?:#\d+|#x[\da-fA-F]+|[a-zA-Z]+);/g, () => {
+    total += 1;
+    return '';
+  });
+
+  // 6. Non-ASCII / Unicode (CJK, emoji, accented chars — often 1-3 tokens per character)
+  text = text.replace(/[^\x00-\x7F]+/g, (chunk) => {
+    total += Math.ceil(chunk.length * 1.5);
+    return '';
+  });
+
+  // 7. Standalone numbers & dates (each digit group ≈ 1-2 tokens)
+  text = text.replace(/\b\d[\d.,:\-\/]*\b/g, (num) => {
+    total += Math.ceil(num.length / 2);
+    return '';
+  });
+
+  // 8. Markdown heading markers, bold/italic, list bullets, blockquote markers
+  text = text.replace(/^#{1,6}\s/gm, () => { total += 1; return ''; });
+  text = text.replace(/(\*{1,3}|_{1,3})/g, () => { total += 1; return ''; });
+  text = text.replace(/^[\-\*\+]\s/gm, () => { total += 1; return ''; });
+  text = text.replace(/^\d+\.\s/gm, () => { total += 1; return ''; });
+  text = text.replace(/^>\s?/gm, () => { total += 1; return ''; });
+
+  // 9. Remaining prose (~4 chars/token)
+  const remaining = text.replace(/\s+/g, ' ').trim();
+  if (remaining.length > 0) {
+    total += Math.ceil(remaining.length / 4);
+  }
+
+  return total;
+}
+
+function formatCharCount(text) {
+  if (charCountUnit === 'words') {
+    const count = text.trim() ? text.trim().split(/\s+/).length : 0;
+    return count > 1000 ? `${(count / 1000).toFixed(1)}k words` : `${count} words`;
+  }
+  if (charCountUnit === 'tokens') {
+    const count = estimateTokens(text);
+    return count > 1000 ? `${(count / 1000).toFixed(1)}k tokens` : `${count} tokens`;
+  }
+  // chars
+  const count = text.length;
+  return count > 1000 ? `${(count / 1000).toFixed(1)}k chars` : `${count} chars`;
+}
+
 /**
  * Update the markdown display based on current settings
  */
@@ -813,14 +905,7 @@ function updateMarkdownDisplay() {
 
   const displayMarkdown = buildExportMarkdown(false);
   markdownTextarea.value = displayMarkdown;
-
-  // Update character count
-  const charCount = displayMarkdown.length;
-  if (charCount > 1000) {
-    charCountEl.textContent = `${(charCount / 1000).toFixed(1)}k chars`;
-  } else {
-    charCountEl.textContent = `${charCount} chars`;
-  }
+  charCountEl.textContent = formatCharCount(displayMarkdown);
 }
 
 async function copyText(text) {
