@@ -1,7 +1,9 @@
 // Background service worker for GitHub to Markdown
 // Handles popup injection, context menu actions, and keyboard shortcuts.
 
+const PARENT_CONTEXT_MENU_ID = 'gh-to-md-parent';
 const CONTEXT_MENU_ID = 'gh-to-md-copy-markdown';
+const PRINT_CONTEXT_MENU_ID = 'gh-to-md-print-markdown';
 
 const DEFAULT_SETTINGS = {
   includeTitle: true,
@@ -133,21 +135,39 @@ async function quickCopyFromTab(tab) {
 
 async function upsertContextMenu() {
   const settings = await getSettings();
-  try {
-    await chrome.contextMenus.remove(CONTEXT_MENU_ID);
-  } catch {
-    // Context menu may not exist yet.
-  }
+
+  // Remove all existing menu items
+  try { await chrome.contextMenus.remove(PARENT_CONTEXT_MENU_ID); } catch { /* may not exist */ }
+  try { await chrome.contextMenus.remove(CONTEXT_MENU_ID); } catch { /* may not exist */ }
+  try { await chrome.contextMenus.remove(PRINT_CONTEXT_MENU_ID); } catch { /* may not exist */ }
 
   if (!settings.enableContextMenu) {
     return;
   }
 
+  const urlPatterns = toDocumentUrlPatterns(settings);
+
+  chrome.contextMenus.create({
+    id: PARENT_CONTEXT_MENU_ID,
+    title: 'GitHub to Markdown',
+    contexts: ['page'],
+    documentUrlPatterns: urlPatterns
+  });
+
   chrome.contextMenus.create({
     id: CONTEXT_MENU_ID,
+    parentId: PARENT_CONTEXT_MENU_ID,
     title: 'Copy as Markdown',
     contexts: ['page'],
-    documentUrlPatterns: toDocumentUrlPatterns(settings)
+    documentUrlPatterns: urlPatterns
+  });
+
+  chrome.contextMenus.create({
+    id: PRINT_CONTEXT_MENU_ID,
+    parentId: PARENT_CONTEXT_MENU_ID,
+    title: 'Print GitHub Markdown',
+    contexts: ['page'],
+    documentUrlPatterns: urlPatterns
   });
 }
 
@@ -166,16 +186,51 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== CONTEXT_MENU_ID) {
-    return;
-  }
-
   const settings = await getSettings();
   if (!settings.enableContextMenu) {
     return;
   }
-  await quickCopyFromTab(tab);
+
+  if (info.menuItemId === CONTEXT_MENU_ID) {
+    await quickCopyFromTab(tab);
+    return;
+  }
+
+  if (info.menuItemId === PRINT_CONTEXT_MENU_ID) {
+    await printFromTab(tab);
+    return;
+  }
 });
+
+async function printFromTab(tab) {
+  if (!tab || !tab.id || !tab.url) {
+    return;
+  }
+
+  if (
+    tab.url.startsWith('chrome://') ||
+    tab.url.startsWith('chrome-extension://') ||
+    tab.url.startsWith('about:') ||
+    tab.url.startsWith('edge://')
+  ) {
+    return;
+  }
+
+  const settings = await getSettings();
+  const supportedHost = await isSupportedHost(tab.url, settings);
+  if (!supportedHost) {
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['print/print.js']
+    });
+  } catch (error) {
+    console.error('[GitHub to Markdown] Print failed:', error);
+  }
+}
 
 chrome.commands.onCommand.addListener(async (command, tab) => {
   if (command !== 'quick-copy-markdown') {

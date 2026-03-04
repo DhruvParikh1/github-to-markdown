@@ -54,6 +54,7 @@
         "popup/popup.html",
         "popup/popup.css",
         "popup/popup.js",
+        "print/print.css",
         "icons/*"
       ],
       "matches": [
