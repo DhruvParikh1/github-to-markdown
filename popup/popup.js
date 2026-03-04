@@ -960,7 +960,7 @@ async function copyToClipboard(forceFrontmatter) {
 
   if (copySuccess) {
     if (forceFrontmatter) {
-      showCopySuccess(copyFrontmatterBtn, copyFrontmatterBtnText, 'Copied', 'Copy + Frontmatter');
+      showCopySuccess(copyFrontmatterBtn, copyFrontmatterBtnText, 'Copied', '+ Frontmatter');
       showToast('Copied with frontmatter', 'success');
     } else {
       showCopySuccess(copyBtn, copyBtnText, 'Copied', 'Copy');
