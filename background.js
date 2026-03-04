@@ -286,3 +286,19 @@ chrome.action.onClicked.addListener(async (tab) => {
     console.error('[GitHub to Markdown] Failed to inject script:', error);
   }
 });
+
+// Handle messages from the popup (e.g. print request)
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'printPage') {
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (tab) {
+        printFromTab(tab).then(() => sendResponse({ success: true }))
+          .catch(err => sendResponse({ success: false, error: err.message }));
+      } else {
+        sendResponse({ success: false, error: 'No active tab' });
+      }
+    });
+    return true; // keep the message channel open for async response
+  }
+});
+

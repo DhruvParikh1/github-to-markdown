@@ -9,11 +9,11 @@ document.addEventListener('DOMContentLoaded', init);
 let markdownTextarea, charCountEl, commentCountEl;
 let pageInfoCard, pageTypeBadge;
 let refreshBtn, copyBtn, copyBtnText;
-let copyFrontmatterBtn, copyFrontmatterBtnText, downloadBtn;
+let copyFrontmatterBtn, copyFrontmatterBtnText, downloadBtn, printBtn;
 let sendToBtn, sendToMenu, customTargetsMenuItems, addOwnBtn;
 let includeTitleCheckbox, includeTimestampsCheckbox, includeNestedCheckbox;
 let includeBotCommentsCheckbox;
-let showPageButtonCheckbox, defaultCopyFrontmatterCheckbox;
+let showPageButtonCheckbox, showPrintButtonCheckbox, defaultCopyFrontmatterCheckbox;
 // Custom select state
 let eventVerbosityValue = 'full';
 let exportPresetValue = 'standard';
@@ -44,6 +44,7 @@ const DEFAULT_SETTINGS = {
   includeBotComments: true,
   eventVerbosity: 'full',
   showPageButton: true,
+  showPrintButton: true,
   exportPreset: 'standard',
   defaultCopyFrontmatter: false,
   enterpriseHosts: [],
@@ -70,6 +71,7 @@ async function init() {
   copyFrontmatterBtn = document.getElementById('copy-frontmatter-btn');
   copyFrontmatterBtnText = document.getElementById('copy-frontmatter-btn-text');
   downloadBtn = document.getElementById('download-btn');
+  printBtn = document.getElementById('print-btn');
 
   sendToBtn = document.getElementById('send-to-btn');
   sendToMenu = document.getElementById('send-to-menu');
@@ -85,6 +87,7 @@ async function init() {
   includeNestedCheckbox = document.getElementById('include-nested');
   includeBotCommentsCheckbox = document.getElementById('include-bot-comments');
   showPageButtonCheckbox = document.getElementById('show-page-button');
+  showPrintButtonCheckbox = document.getElementById('show-print-button');
   defaultCopyFrontmatterCheckbox = document.getElementById('default-copy-frontmatter');
   enableKeyboardShortcutCheckbox = document.getElementById('enable-keyboard-shortcut');
   enableContextMenuCheckbox = document.getElementById('enable-context-menu');
@@ -131,6 +134,7 @@ async function init() {
   copyBtn.addEventListener('click', () => copyToClipboard(false));
   copyFrontmatterBtn.addEventListener('click', () => copyToClipboard(true));
   downloadBtn.addEventListener('click', downloadMarkdown);
+  printBtn.addEventListener('click', handlePrintClick);
 
   // Settings listeners
   includeTitleCheckbox.addEventListener('change', async () => {
@@ -156,6 +160,10 @@ async function init() {
   defaultCopyFrontmatterCheckbox.addEventListener('change', async () => {
     await saveSettings();
     updateMarkdownDisplay();
+  });
+  showPrintButtonCheckbox.addEventListener('change', async () => {
+    await saveSettings();
+    applyPrintButtonLayout();
   });
   enableKeyboardShortcutCheckbox.addEventListener('change', saveSettings);
   enableContextMenuCheckbox.addEventListener('change', saveSettings);
@@ -422,7 +430,98 @@ function setExportActionsEnabled(enabled) {
   copyBtn.disabled = !enabled;
   copyFrontmatterBtn.disabled = !enabled;
   downloadBtn.disabled = !enabled;
+  if (printBtn) printBtn.disabled = !enabled;
   if (sendToBtn) sendToBtn.disabled = !enabled;
+}
+
+/**
+ * Handle Print button click - sends message to background to inject print script.
+ */
+async function handlePrintClick() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'printPage' });
+    if (response && !response.success) {
+      showToast(response.error || 'Print failed', 'error');
+    }
+  } catch (error) {
+    console.error('Print failed:', error);
+    showToast('Print failed', 'error');
+  }
+}
+
+// SVG icon for frontmatter button (used in original/expanded layout)
+const FRONTMATTER_ICON_SVG = `<svg class="btn-icon icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+  <polyline points="14 2 14 8 20 8"></polyline>
+  <line x1="16" y1="13" x2="8" y2="13"></line>
+  <line x1="16" y1="17" x2="8" y2="17"></line>
+  <polyline points="10 9 9 9 8 9"></polyline>
+</svg>`;
+
+/**
+ * Toggle the action button layout based on showPrintButton setting.
+ *
+ * Print ON layout:
+ *   Row 1: Send To (left)  |  [Copy][+ Frontmatter] inside .copy-group (right)
+ *   Row 2: Print (left)    |  Download .md (right)
+ *
+ * Print OFF layout:
+ *   Row 1: Send To (left)  |  Copy (right, full-width in grid cell)
+ *   Row 2: Copy + Frontmatter with icon (left)  |  Download .md (right)
+ */
+function applyPrintButtonLayout() {
+  const showPrint = currentSettings.showPrintButton !== false;
+  const actionButtons = document.querySelector('.action-buttons');
+  const rows = actionButtons.querySelectorAll('.action-row');
+  const row1 = rows[0];
+  const row2 = rows[1];
+
+  if (showPrint) {
+    // — Print ON: split Copy / +Frontmatter in a .copy-group —
+    printBtn.style.display = '';
+
+    // Ensure .copy-group wrapper exists in row1
+    let copyGroup = row1.querySelector('.copy-group');
+    if (!copyGroup) {
+      copyGroup = document.createElement('div');
+      copyGroup.className = 'copy-group';
+      row1.appendChild(copyGroup);
+    }
+    // Move buttons into the group (order: copy, frontmatter)
+    copyGroup.appendChild(copyBtn);
+    copyGroup.appendChild(copyFrontmatterBtn);
+
+    // Update frontmatter button for compact layout
+    copyFrontmatterBtnText.textContent = '+ Frontmatter';
+    // Remove the icon if present (compact mode doesn't show it)
+    const existingIcon = copyFrontmatterBtn.querySelector('.btn-icon');
+    if (existingIcon) existingIcon.remove();
+
+    // Make sure print + download are in row2
+    row2.insertBefore(printBtn, row2.firstChild);
+    if (!row2.contains(downloadBtn)) row2.appendChild(downloadBtn);
+
+  } else {
+    // — Print OFF: original full-width layout —
+    printBtn.style.display = 'none';
+
+    // Remove .copy-group wrapper — move copyBtn directly into row1
+    const copyGroup = row1.querySelector('.copy-group');
+    if (copyGroup) {
+      row1.appendChild(copyBtn);   // move out of group into row1
+      copyGroup.remove();
+    }
+
+    // Move frontmatter button to row2 (before download)
+    row2.insertBefore(copyFrontmatterBtn, downloadBtn);
+
+    // Restore frontmatter icon + full label
+    copyFrontmatterBtnText.textContent = 'Copy + Frontmatter';
+    if (!copyFrontmatterBtn.querySelector('.btn-icon')) {
+      copyFrontmatterBtn.insertAdjacentHTML('afterbegin', FRONTMATTER_ICON_SVG);
+    }
+  }
 }
 
 /**
@@ -581,6 +680,7 @@ function collectUiSettings(baseSettings = currentSettings) {
     includeBotComments: includeBotCommentsCheckbox.checked,
     eventVerbosity: eventVerbosityValue || 'full',
     showPageButton: showPageButtonCheckbox.checked,
+    showPrintButton: showPrintButtonCheckbox.checked,
     exportPreset: exportPresetValue || 'standard',
     defaultCopyFrontmatter: defaultCopyFrontmatterCheckbox.checked,
     enableKeyboardShortcut: enableKeyboardShortcutCheckbox.checked,
@@ -609,10 +709,13 @@ async function loadSettings() {
     showPageButtonCheckbox.checked = currentSettings.showPageButton;
     setSettingSelect('export-preset', currentSettings.exportPreset || 'standard');
     defaultCopyFrontmatterCheckbox.checked = currentSettings.defaultCopyFrontmatter;
+    showPrintButtonCheckbox.checked = currentSettings.showPrintButton !== false;
     enableKeyboardShortcutCheckbox.checked = currentSettings.enableKeyboardShortcut !== false;
     enableContextMenuCheckbox.checked = currentSettings.enableContextMenu !== false;
     enterpriseHostsInput.value = currentSettings.enterpriseHosts.join(', ');
     charCountUnit = currentSettings.charCountUnit || 'chars';
+
+    applyPrintButtonLayout();
 
     renderCustomTargetsList();
     renderCustomTargetsMenu();
@@ -727,8 +830,11 @@ async function fetchMarkdown() {
     const isPullRequest = tab.url.includes('/pull/');
 
     if (!isDiscussion && !isIssue && !isPullRequest) {
-      showToast('Not a supported page', 'error');
-      markdownTextarea.placeholder = 'Navigate to a discussion (/discussions/), issue (/issues/), or pull request (/pull/) page to convert it to markdown.';
+      markdownTextarea.placeholder = 'Markdown conversion is available on discussion, issue, and pull request pages.\n\nYou can still use Print on this page.';
+      // Print still works on any GitHub page with markdown content
+      if (printBtn && currentSettings.showPrintButton !== false) {
+        printBtn.disabled = false;
+      }
       return;
     }
 
@@ -960,7 +1066,8 @@ async function copyToClipboard(forceFrontmatter) {
 
   if (copySuccess) {
     if (forceFrontmatter) {
-      showCopySuccess(copyFrontmatterBtn, copyFrontmatterBtnText, 'Copied', '+ Frontmatter');
+      const resetLabel = currentSettings.showPrintButton !== false ? '+ Frontmatter' : 'Copy + Frontmatter';
+      showCopySuccess(copyFrontmatterBtn, copyFrontmatterBtnText, 'Copied', resetLabel);
       showToast('Copied with frontmatter', 'success');
     } else {
       showCopySuccess(copyBtn, copyBtnText, 'Copied', 'Copy');
